@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg: #0D0D0D;
+    --card: #1A1A1A;
+    --accent: #D4AF37;
+    --text: #F5F5F5;
+    --muted: #A3A3A3;
+    --radius: 0.5rem;
+    --container-padding: 2rem;
+    --container-max-width: 1400px;
+  }
+}
+
+@layer base {
+  body {
+    @apply bg-background text-text min-h-full flex flex-col font-sans antialiased;
+  }
+}
