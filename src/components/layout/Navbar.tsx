@@ -1,4 +1,5 @@
 import { Container } from "./Container";
+import Link from "next/link";
 
 export function Navbar() {
   return (
@@ -7,9 +8,8 @@ export function Navbar() {
         <div className="flex h-16 items-center justify-between">
           <div className="text-xl font-bold text-accent">Artfolio</div>
           <nav className="flex gap-6">
-            <a href="#" className="text-sm font-medium text-text hover:text-accent transition-colors">Works</a>
-            <a href="#" className="text-sm font-medium text-text hover:text-accent transition-colors">About</a>
-            <a href="#" className="text-sm font-medium text-text hover:text-accent transition-colors">Contact</a>
+            <Link href="/" className="text-sm font-medium text-text transition-colors duration-[500ms] hover:text-accent">Exhibition</Link>
+            <Link href="/commission" className="text-sm font-medium text-text transition-colors duration-[500ms] hover:text-accent">Commission</Link>
           </nav>
         </div>
       </Container>
