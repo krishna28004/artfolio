@@ -1,7 +1,11 @@
 import { Section } from "@/components/layout/Section";
 import { CommissionForm } from "@/components/commission/CommissionForm";
 
-export default function CommissionPage() {
+export default async function CommissionPage(props: any) {
+  // Await search params safely to prevent Next 15 suspense errors
+  const searchParams = await Promise.resolve(props.searchParams || {});
+  const artworkRef = searchParams.ref ? String(searchParams.ref) : "";
+
   return (
     <main className="flex-1 flex flex-col bg-background">
       <Section className="py-24 md:py-32">
@@ -17,7 +21,7 @@ export default function CommissionPage() {
             </p>
           </div>
 
-          <CommissionForm />
+          <CommissionForm initialReference={artworkRef} />
         </div>
 
       </Section>
