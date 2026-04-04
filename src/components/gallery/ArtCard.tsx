@@ -1,46 +1,42 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Artwork } from "@/lib/data/placeholders";
 
 interface ArtCardProps {
-  id: string;
-  title: string;
-  artist: string;
-  year: string;
-  imageUrl: string;
-  index: number;
+  artwork: Artwork;
 }
 
-export function ArtCard({ id, title, artist, year, imageUrl, index }: ArtCardProps) {
-  // 1. RHYTHM: Stagger the middle column down to break the rigid horizontal line
-  const isMiddleColumn = index % 3 === 1;
-  const rhythmOffset = isMiddleColumn ? "lg:translate-y-12" : "";
-
+export function ArtCard({ artwork }: ArtCardProps) {
   return (
-    <Link href={`/artwork/${id}`} className={`group flex flex-col`}>
-      
-        {/* Subtle depth: extremely soft, barely-there shadow (not heavy UI-like). 
-            Minimal hover: gentle opacity drop on hover with a slow custom ease curve down to 85% */}
-      <div className="relative w-full aspect-[4/5] bg-[#0A0A0A] border border-white/5 shadow-[0_4px_24px_rgba(0,0,0,0.2)] overflow-hidden transition-opacity duration-[800ms] ease-[cubic-bezier(0.25,1,0.5,1)] group-hover:opacity-85">
-        <Image 
-          src={imageUrl} 
-          alt={title} 
-          fill 
+    <Link href={`/artwork/${artwork.id}`} className="group flex flex-col gap-4 block">
+      {/* 4:5 Aspect Ratio Container */}
+      <div className="relative aspect-[4/5] w-full overflow-hidden bg-[#0a0a0a] border border-white/5 shadow-2xl">
+        <Image
+          src={artwork.imageUrl}
+          alt={artwork.title}
+          fill
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-          className="object-cover object-center"
+          className="object-cover transition-transform duration-700 ease-[cubic-bezier(0.25,1,0.5,1)] group-hover:scale-105"
+          placeholder="blur"
+          blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
         />
+        {/* Subtle overlay on hover */}
+        <div className="absolute inset-0 bg-black/0 transition-colors duration-500 group-hover:bg-black/20" />
       </div>
 
-      {/* Typography hierarchy: 
-          - title prominent but not screaming 
-          - greater spacing before metadata
-          - metadata is subdued and widely tracked */}
-      <div className="mt-5 flex flex-col px-1">
-        <h3 className="font-serif text-[18px] md:text-[20px] text-text/90 transition-colors duration-500 group-hover:text-accent">
-          {title}
-        </h3>
-        <p className="font-sans text-[12px] md:text-[13px] text-muted/50 mt-2 uppercase tracking-[0.15em] font-medium">
-          {artist}  {year}
-        </p>
+      {/* Typography Hierarchy */}
+      <div className="flex flex-col gap-1 transition-opacity duration-300 group-hover:opacity-80">
+        <div className="flex justify-between items-baseline">
+          <h3 className="text-lg font-medium text-white tracking-wide">{artwork.title}</h3>
+          <span className="text-sm text-zinc-500">{artwork.year}</span>
+        </div>
+        <p className="text-sm text-zinc-400 font-light">{artwork.artist}</p>
+        {artwork.price && artwork.isAvailable && (
+          <p className="text-sm text-zinc-300 mt-1">${artwork.price.toLocaleString()}</p>
+        )}
+        {!artwork.isAvailable && (
+          <p className="text-sm text-zinc-600 mt-1 tracking-wider uppercase text-xs">Sold</p>
+        )}
       </div>
     </Link>
   );
