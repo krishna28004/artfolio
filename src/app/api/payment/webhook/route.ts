@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 export async function POST(req: Request) {
   try {
     // Webhook bodies must be processed as raw text to compute accurate signatures
-    const body = await req.text(); 
+    const body = await req.text();
     const signature = req.headers.get("x-razorpay-signature");
 
     if (!signature) {
@@ -21,9 +21,9 @@ export async function POST(req: Request) {
       .update(body)
       .digest("hex");
 
-    if (expectedSignature !== signature && secret !== "mock_webhook_secret") {
-       console.error(`[WEBHOOK_FATAL] Invalid Cryptographic Signature intercepted from Razorpay origin.`);
-       return NextResponse.json({ success: false }, { status: 400 });
+    if (expectedSignature !== signature) {
+      console.error(`[WEBHOOK_FATAL] Invalid Cryptographic Signature intercepted from Razorpay origin.`);
+      return NextResponse.json({ success: false }, { status: 400 });
     }
 
     const event = JSON.parse(body);
@@ -43,10 +43,10 @@ export async function POST(req: Request) {
         .select("status")
         .eq("razorpay_order_id", orderId)
         .single();
-        
+
       if (commission?.status === "paid") {
-         console.log(`[IDEMPOTENCY_TRIP] Duplicate webhook skip for Order: ${orderId}`);
-         return NextResponse.json({ success: true, message: "Already processed" });
+        console.log(`[IDEMPOTENCY_TRIP] Duplicate webhook skip for Order: ${orderId}`);
+        return NextResponse.json({ success: true, message: "Already processed" });
       }
 
       await supabase
@@ -57,13 +57,13 @@ export async function POST(req: Request) {
         .eq("status", "approved");
 
       return NextResponse.json({ success: true });
-    } 
-    
+    }
+
     // Unsuccessful Payment Event Stream
     if (event.event === "payment.failed") {
       const errReason = event.payload.payment.entity.error_description;
       console.warn(`[TX_FAILED] Webhook Notified - Reason: ${errReason}`);
-      
+
       // We do NOT mutate DB status to 'rejected'. We allow the user to immediately retry before the 24h deadline expires.
       return NextResponse.json({ success: true });
     }

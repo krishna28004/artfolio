@@ -20,12 +20,12 @@ export async function POST(req: Request) {
     // 1B. Expiration Deadline Enforcement Algorithm
     if (commission?.expires_at) {
       if (new Date() > new Date(commission.expires_at)) {
-         console.warn(`[ORDER_EXPIRED] Order generation blocked for dead commission allocation: ${commissionId}`);
-         
-         // Auto-mutate DB to expired state actively closing window
-         await supabase.from("commissions").update({ status: "expired" }).eq("id", commissionId);
-         
-         return NextResponse.json({ success: false, message: "Acquisition window permanently expired." }, { status: 410 });
+        console.warn(`[ORDER_EXPIRED] Order generation blocked for dead commission allocation: ${commissionId}`);
+
+        // Auto-mutate DB to expired state actively closing window
+        await supabase.from("commissions").update({ status: "expired" }).eq("id", commissionId);
+
+        return NextResponse.json({ success: false, message: "Acquisition window permanently expired." }, { status: 410 });
       }
     }
 
@@ -44,8 +44,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, orderId: order.id, amount: price });
   } catch (error) {
     console.error("[RAZORPAY_FATAL]", error);
-    
-    // For local mock demonstration unblocked UX without valid Rzp keys
-    return NextResponse.json({ success: true, orderId: "order_mock_1Hxzx0a2X9", amount: 500000 });
+
+    return NextResponse.json({ success: false, message: "Secure transaction link could not be generated.", error: String(error) }, { status: 500 });
   }
 }

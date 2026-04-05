@@ -60,7 +60,7 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
     setUploadState("uploading");
     setServerError("");
     const result = await uploadImageToCloudinary(file);
-    
+
     if (result && result.url) {
       setValue("imageUrl", result.url);
       setValue("publicId", result.publicId);
@@ -73,7 +73,7 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
 
   const onSubmit = async (data: CommissionFormData) => {
     setServerError("");
-    
+
     // Front-end AbortController Timeout (8000ms max ceiling limit)
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
@@ -85,16 +85,16 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
         body: JSON.stringify(data),
         signal: controller.signal
       });
-      
+
       const resData = await res.json();
       if (!res.ok || !resData.success) throw new Error(resData.message || "Failed to submit.");
-      
+
       setIsSubmitted(true);
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
-         setServerError("The network took too long. Please ensure your connection is stable and try again.");
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        setServerError("The network took too long. Please ensure your connection is stable and try again.");
       } else {
-         setServerError(err.message);
+        setServerError(err instanceof Error ? err.message : "An unexpected error occurred.");
       }
     } finally {
       clearTimeout(timeoutId);
@@ -104,15 +104,15 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
   if (isSubmitted) {
     return (
       <div className="py-24 text-center transition-opacity duration-1000 opacity-100">
-        <h3 className="font-serif text-[32px] text-accent mb-4">Inquiry Received</h3>
+        <h3 className="font-serif text-[32px] text-primary mb-4">Inquiry Received</h3>
         <p className="text-muted font-sans text-[15px]">The curator will review your request and respond shortly.</p>
       </div>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className={`flex flex-col gap-10 w-full animate-in fade-in duration-500 transition-opacity ${isSubmitting ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
-      
+    <form onSubmit={handleSubmit(onSubmit)} className={`flex flex-col gap-10 w-full animate-reveal transition-opacity ${isSubmitting ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+
       {/* 1. Base Info */}
       <div className="flex flex-col md:flex-row gap-10">
         <div className="w-full flex flex-col">
@@ -129,15 +129,15 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
       <div className="flex flex-col gap-2 relative">
         <label className="text-[11px] uppercase tracking-[0.15em] text-muted/60 mb-1 font-sans">Reference Material (Optional)</label>
         <div className={`relative border border-dashed p-8 text-center transition-colors duration-[600ms] 
-          ${uploadState === "done" ? 'border-accent/40 bg-accent/5' : 'border-white/10 hover:bg-white/5'}`}>
-          
-          <input 
-            type="file" 
+          ${uploadState === "done" ? 'border-primary/40 bg-primary/5' : 'border-outline-variant/30 hover:bg-surface-highest/20'}`}>
+
+          <input
+            type="file"
             accept="image/jpeg, image/png, image/webp"
             onChange={handleFileUpload}
-            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10" 
+            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
           />
-          
+
           <span className="text-[13px] text-muted/80 tracking-wide font-sans">
             {uploadState === "idle" && "Drag & drop or browse to upload"}
             {uploadState === "uploading" && "Uploading reference securely..."}
@@ -154,7 +154,7 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
           {["Small (< 24\")", "Medium (24\" - 48\")", "Vast (> 48\")", "Undecided"].map((opt) => (
             <label key={opt} className="relative cursor-pointer">
               <input type="radio" value={opt} {...register("size")} className="peer absolute opacity-0 w-full h-full cursor-pointer z-10" />
-              <div className="px-6 py-3 border border-white/10 text-[12px] text-muted transition-colors duration-500 peer-checked:border-accent peer-checked:text-accent hover:border-white/30 font-sans">
+              <div className="px-6 py-3 border border-outline-variant/30 text-[12px] text-muted transition-colors duration-[600ms] ease-editorial peer-checked:border-primary peer-checked:text-primary hover:border-outline-variant font-sans">
                 {opt}
               </div>
             </label>
@@ -169,7 +169,7 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
           {["$2k - $5k", "$5k - $10k", "$10k+", "Undisclosed"].map((opt) => (
             <label key={opt} className="relative cursor-pointer">
               <input type="radio" value={opt} {...register("budget")} className="peer absolute opacity-0 w-full h-full cursor-pointer z-10" />
-              <div className="px-6 py-3 border border-white/10 text-[12px] text-muted transition-colors duration-500 peer-checked:border-accent peer-checked:text-accent hover:border-white/30 font-sans">
+              <div className="px-6 py-3 border border-outline-variant/30 text-[12px] text-muted transition-colors duration-[600ms] ease-editorial peer-checked:border-primary peer-checked:text-primary hover:border-outline-variant font-sans">
                 {opt}
               </div>
             </label>
@@ -196,7 +196,7 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
           {isSubmitting ? "Transmitting Requirements..." : "Submit Request"}
         </Button>
       </div>
-      
+
     </form>
   );
 }

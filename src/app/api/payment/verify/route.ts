@@ -15,27 +15,27 @@ export async function POST(req: Request) {
       .digest("hex");
 
     // 2. Absolute matching check
-    if (generated_signature === razorpay_signature || secret === "mock_key_secret") {
-      
+    if (generated_signature === razorpay_signature) {
+
       // 3. Signature matched mathematically. Idempotency Check.
       const { data: tracking } = await supabase
         .from("commissions")
         .select("status")
         .eq("id", commissionId)
         .single();
-        
+
       if (tracking?.status === "paid" || tracking?.status === "fulfilled") {
-         console.log(`[IDEMPOTENCY_TRIP] Duplicate verify call safely aborted for ${commissionId}`);
-         return NextResponse.json({ success: true, message: "Payment previously recorded." });
+        console.log(`[IDEMPOTENCY_TRIP] Duplicate verify call safely aborted for ${commissionId}`);
+        return NextResponse.json({ success: true, message: "Payment previously recorded." });
       }
 
       // 4. Update internal DB state safely.
       const { error: dbError } = await supabase
         .from("commissions")
-        .update({ 
-            status: 'paid', 
-            razorpay_order_id, 
-            razorpay_payment_id 
+        .update({
+          status: 'paid',
+          razorpay_order_id,
+          razorpay_payment_id
         })
         .eq("id", commissionId);
 

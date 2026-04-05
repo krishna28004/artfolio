@@ -1,6 +1,12 @@
 "use client";
 import React, { useEffect, useRef, useImperativeHandle, forwardRef } from "react";
-import { fabric } from "fabric";
+// Dynamically require fabric ONLY on the client to avoid SSR 'fabric is not defined' crashes
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let fabric: any;
+if (typeof window !== "undefined") {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  fabric = require("fabric").fabric;
+}
 
 export interface WallFitEngineRef {
   loadRoom: (dataUrl: string) => void;
@@ -23,7 +29,8 @@ export const WallFitEngine = forwardRef<WallFitEngineRef, EngineProps>(({ onRead
   useImperativeHandle(ref, () => ({
     loadRoom: (dataUrl: string) => {
       if (!fabricRef.current) return;
-      fabric.Image.fromURL(dataUrl, (img) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      fabric.Image.fromURL(dataUrl, (img: any) => {
         const canvas = fabricRef.current!;
         const scaleFactor = Math.min(canvas.width! / img.width!, canvas.height! / img.height!);
         img.set({ originX: 'center', originY: 'center', left: canvas.width! / 2, top: canvas.height! / 2, scaleX: scaleFactor, scaleY: scaleFactor, selectable: false, evented: false });
@@ -32,24 +39,25 @@ export const WallFitEngine = forwardRef<WallFitEngineRef, EngineProps>(({ onRead
     },
     loadArtwork: (url: string) => {
       if (!fabricRef.current) return;
-      fabric.Image.fromURL(url, (img) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      fabric.Image.fromURL(url, (img: any) => {
         const canvas = fabricRef.current!;
         img.set({
           originX: 'center', originY: 'center',
           left: canvas.width! / 2, top: canvas.height! / 2,
-          scaleX: 0.5, scaleY: 0.5,
+          scaleX: 0.3, scaleY: 0.3,
           borderColor: '#D4AF37', cornerColor: '#D4AF37', cornerSize: 12, transparentCorners: false,
           shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.5)', blur: 35, offsetX: 15, offsetY: 25 })
         });
-        
+
         // Anti-void Object Constraints
-        img.on('moving', function() {
-           if (img.left! < 0) img.set('left', 0);
-           if (img.top! < 0) img.set('top', 0);
-           if (img.left! > canvas.width!) img.set('left', canvas.width!);
-           if (img.top! > canvas.height!) img.set('top', canvas.height!);
+        img.on('moving', function () {
+          if (img.left! < 0) img.set('left', 0);
+          if (img.top! < 0) img.set('top', 0);
+          if (img.left! > canvas.width!) img.set('left', canvas.width!);
+          if (img.top! > canvas.height!) img.set('top', canvas.height!);
         });
-        
+
         canvas.add(img);
         artworkRef.current = img;
         canvas.setActiveObject(img);
@@ -83,19 +91,31 @@ export const WallFitEngine = forwardRef<WallFitEngineRef, EngineProps>(({ onRead
     if (!canvasRef.current || fabricRef.current) return;
     const w = window.innerWidth > 768 ? window.innerWidth * 0.7 : window.innerWidth;
     const h = window.innerHeight;
-    
+
     fabricRef.current = new fabric.Canvas(canvasRef.current, { width: w, height: h, backgroundColor: '#0a0a0a', selection: false });
+
+    const handleResize = () => {
+      if (!fabricRef.current) return;
+      const newW = window.innerWidth > 768 ? window.innerWidth * 0.7 : window.innerWidth;
+      const newH = window.innerHeight;
+      fabricRef.current.setDimensions({ width: newW, height: newH });
+      fabricRef.current.renderAll();
+    };
+
+    window.addEventListener('resize', handleResize);
+
     if (onReady) onReady();
-    
-    return () => { 
-        fabricRef.current?.dispose(); 
-        fabricRef.current = null; 
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      fabricRef.current?.dispose();
+      fabricRef.current = null;
     };
   }, [onReady]);
 
   return (
-    <div className="w-full h-full flex items-center justify-center p-1 relative border-r border-white/5 bg-black">
-      <canvas ref={canvasRef} className="w-full h-full shadow-2xl" />
+    <div className="w-full h-full flex items-center justify-center relative border-r border-white/5 bg-black overflow-hidden">
+      <canvas ref={canvasRef} className="shadow-2xl" />
     </div>
   );
 });

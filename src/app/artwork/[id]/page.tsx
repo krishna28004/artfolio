@@ -13,12 +13,16 @@ async function getArtwork(id: string) {
 
   return {
     ...artwork,
-    medium: "Digital Native / Generative Texture",
-    dimensions: "8000 x 10000 px",
+    medium: artwork.medium || "Pencil on Paper",
+    dimensions: artwork.dimensions || "A3 Sheet",
   };
 }
 
-export default async function ArtworkPage(props: any) {
+interface PageProps {
+  params: { id: string } | Promise<{ id: string }>;
+}
+
+export default async function ArtworkPage(props: PageProps) {
   // Awaiting params safely for universal Next.js 14/15 compat
   const params = await Promise.resolve(props.params);
   const artwork = await getArtwork(params.id);
@@ -28,17 +32,20 @@ export default async function ArtworkPage(props: any) {
   }
 
   return (
-    <main className="flex-1 flex flex-col bg-background">
+    <div className="flex-1 flex flex-col bg-background">
       <Section className="pt-8 pb-32">
 
-        {/* Navigation Return */}
-        <div className="mb-10">
+        {/* Navigation Return & Action block */}
+        <div className="mb-10 flex flex-col sm:flex-row justify-between sm:items-center gap-4">
           <Link href="/" className="group font-sans text-[13px] text-muted hover:text-text uppercase tracking-widest transition-colors duration-[600ms] flex items-center gap-2 w-fit">
-            {/* The arrow pulls slightly backwards on hover, easing the user into the 'return' action */}
             <span className="transition-transform duration-[600ms] ease-[cubic-bezier(0.25,1,0.5,1)] group-hover:-translate-x-1">
               &larr;
             </span>
             <span>Return to Exhibition</span>
+          </Link>
+
+          <Link href={`/artwork/${artwork.id}?wallfit=true`} className="text-[11px] font-sans text-primary tracking-[0.2em] uppercase border-b border-primary pb-1 hover:text-white hover:border-white transition-colors self-start sm:self-auto duration-[600ms] ease-editorial">
+            Try WallFit&trade; Preview
           </Link>
         </div>
 
@@ -53,17 +60,19 @@ export default async function ArtworkPage(props: any) {
           {/* INFORMATION (Restraint: 5 Columns) */}
           <div className="lg:col-span-5 lg:py-12">
             <ArtworkInfo
+              id={artwork.id}
               title={artwork.title}
               artist={artwork.artist}
               year={artwork.year.toString()}
               medium={artwork.medium}
               dimensions={artwork.dimensions}
               description={artwork.description}
+              imageUrl={artwork.imageUrl}
             />
           </div>
 
         </div>
       </Section>
-    </main>
+    </div>
   );
 }
