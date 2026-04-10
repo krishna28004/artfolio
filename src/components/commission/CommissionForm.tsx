@@ -74,30 +74,42 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
   const onSubmit = async (data: CommissionFormData) => {
     setServerError("");
 
-    // Front-end AbortController Timeout (8000ms max ceiling limit)
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const maxRetries = 3;
+    let attempt = 0;
 
-    try {
-      const res = await fetch("/api/commission", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-        signal: controller.signal
-      });
+    while (attempt < maxRetries) {
+      // Front-end AbortController Timeout (8000ms max ceiling limit)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-      const resData = await res.json();
-      if (!res.ok || !resData.success) throw new Error(resData.message || "Failed to submit.");
+      try {
+        const res = await fetch("/api/commission", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+          signal: controller.signal
+        });
 
-      setIsSubmitted(true);
-    } catch (err: unknown) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        setServerError("The network took too long. Please ensure your connection is stable and try again.");
-      } else {
-        setServerError(err instanceof Error ? err.message : "An unexpected error occurred.");
+        clearTimeout(timeoutId);
+        const resData = await res.json();
+        if (!res.ok || !resData.success) throw new Error(resData.message || "Failed to submit.");
+
+        setIsSubmitted(true);
+        return;
+      } catch (err: unknown) {
+        clearTimeout(timeoutId);
+        attempt++;
+        if (attempt >= maxRetries) {
+          if (err instanceof Error && err.name === 'AbortError') {
+            setServerError("The network took too long. Please ensure your connection is stable and try again.");
+          } else {
+            setServerError(err instanceof Error ? err.message : "An unexpected error occurred.");
+          }
+        } else {
+          // Explicit Exponential Backoff
+          await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+        }
       }
-    } finally {
-      clearTimeout(timeoutId);
     }
   };
 
@@ -166,7 +178,7 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
       <div className="flex flex-col gap-2">
         <label className="text-[11px] uppercase tracking-[0.15em] text-muted/60 mb-2 font-sans">Budget Range</label>
         <div className="flex flex-wrap gap-4">
-          {["$2k - $5k", "$5k - $10k", "$10k+", "Undisclosed"].map((opt) => (
+          {["2k - 5k Rs.", "5k - 10k Rs.", "10k+ Rs.", "Undisclosed"].map((opt) => (
             <label key={opt} className="relative cursor-pointer">
               <input type="radio" value={opt} {...register("budget")} className="peer absolute opacity-0 w-full h-full cursor-pointer z-10" />
               <div className="px-6 py-3 border border-outline-variant/30 text-[12px] text-muted transition-colors duration-[600ms] ease-editorial peer-checked:border-primary peer-checked:text-primary hover:border-outline-variant font-sans">

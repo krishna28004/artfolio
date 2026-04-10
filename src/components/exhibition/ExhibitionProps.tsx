@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useLayoutEffect } from "react";
 import * as THREE from "three";
 
 export function HangingOrb({ position }: { position: [number, number, number] }) {
@@ -33,13 +33,22 @@ export function HangingOrb({ position }: { position: [number, number, number] })
                 distance={15}
                 color="#ffcc80"
                 decay={2}
-                castShadow
+                castShadow={false}
             />
         </group>
     );
 }
 
 export function BeamSpotlight({ position, target }: { position: [number, number, number], target: [number, number, number] }) {
+    const lightRef = useRef<THREE.SpotLight>(null);
+    const targetRef = useRef<THREE.Object3D>(null);
+
+    useLayoutEffect(() => {
+        if (lightRef.current && targetRef.current) {
+            lightRef.current.target = targetRef.current;
+        }
+    }, []);
+
     return (
         <group position={position}>
             {/* Light Housing */}
@@ -50,14 +59,18 @@ export function BeamSpotlight({ position, target }: { position: [number, number,
 
             {/* Spotlight for the artwork below */}
             <spotLight
+                ref={lightRef}
                 position={[0, 0, 0]}
-                target-position={target}
-                angle={0.4}
-                penumbra={0.5}
-                intensity={10}
-                distance={20}
+                angle={0.6}
+                penumbra={0.8}
+                intensity={200}
+                distance={25}
                 color="#fff9f0"
-                castShadow
+                castShadow={false}
+            />
+            <object3D 
+                ref={targetRef} 
+                position={[target[0] - position[0], target[1] - position[1], target[2] - position[2]]} 
             />
         </group>
     );

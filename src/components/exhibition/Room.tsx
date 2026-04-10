@@ -7,23 +7,22 @@ export function Room() {
     floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping;
     floorTexture.repeat.set(4, 8);
 
-    const wallMaterial = <meshStandardMaterial color="#222222" roughness={0.95} metalness={0.05} />;
-    const woodMaterial = <meshStandardMaterial color="#8b5a2b" roughness={0.6} metalness={0.1} />;
+    const wallMaterial = <meshStandardMaterial color="#e8e6e1" roughness={0.8} metalness={0.05} />;
+    const woodMaterial = <meshStandardMaterial color="#b8865c" roughness={0.6} metalness={0.1} />;
     const darkWoodMaterial = (
         <meshStandardMaterial
             map={floorTexture}
-            color="#443322"
-            roughness={0.4}
+            color="#ffffff"
+            roughness={0.3}
             metalness={0.2}
         />
     );
-    const blackTrimMaterial = <meshStandardMaterial color="#080808" roughness={0.9} />;
+    const blackTrimMaterial = <meshStandardMaterial color="#333333" roughness={0.8} />;
 
     // Create an array for the vertical wooden slats
     const slatCount = 45;
     const slatWidth = 0.08;
     const slatSpacing = 0.18;
-    const slatsWidthTotal = slatCount * slatSpacing;
 
     return (
         <group>
@@ -36,7 +35,7 @@ export function Room() {
             {/* Ceiling - Dark Industrial Concrete Panel */}
             <mesh position={[0, 7, 0]} rotation={[Math.PI / 2, 0, 0]}>
                 <planeGeometry args={[50, 80]} />
-                <meshStandardMaterial color="#0c0c0c" roughness={1} />
+                <meshStandardMaterial color="#d4d4d4" roughness={1} />
             </mesh>
 
             {/* Ceiling Beams - Rustic Structural Wood */}

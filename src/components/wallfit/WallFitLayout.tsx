@@ -49,6 +49,11 @@ export function WallFitLayout({ artworkUrl, onClose }: WallFitLayoutProps) {
           engineRef.current.loadArtwork(artworkUrl);
           setStep(2); // Auto transition to Placement Step
         }
+
+        // Garbage Collect Heavy Buffers
+        img.src = "";
+        canvas.width = 0;
+        canvas.height = 0;
       };
       img.src = data;
     };

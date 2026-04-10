@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Container } from "./Container";
 import { Sidebar } from "./Sidebar";
 import { Heart } from "lucide-react";
@@ -25,10 +26,10 @@ export function Navbar() {
         <Container>
           <div className="flex h-20 items-center justify-between">
             <Link href="/" className="group flex flex-col items-start gap-0.5">
-              <span className="text-[28px] font-serif tracking-[0.35em] font-light text-text group-hover:text-primary transition-colors duration-700">
+              <span className="text-[28px] sm:text-[32px] font-serif tracking-[0.2em] font-light bg-clip-text text-transparent bg-gradient-to-r from-[#d9b870] via-[#ffebb8] to-[#bd9544] transition-all duration-700 group-hover:brightness-125">
                 ARTFOLIO
               </span>
-              <span className="block w-full h-[1px] bg-gradient-to-r from-primary/80 via-primary/40 to-transparent scale-x-0 group-hover:scale-x-100 origin-left transition-transform duration-700"></span>
+              <span className="block w-full h-[1px] bg-gradient-to-r from-[#d9b870]/80 via-[#ffebb8]/40 to-transparent scale-x-0 group-hover:scale-x-100 origin-left transition-transform duration-700"></span>
             </Link>
 
             <div className="flex items-center gap-8">

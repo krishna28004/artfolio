@@ -18,10 +18,10 @@ export function Hero() {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto mt-6">
-            <Link href="/#gallery" className="px-10 py-5 bg-gradient-to-r from-primary to-primary-container text-[#3c2f00] text-center uppercase text-[12px] tracking-[0.1em] font-medium transition-all duration-[600ms] ease-editorial hover:brightness-110 shadow-ambient">
+            <Link href="/#gallery" className="px-10 py-5 bg-gradient-to-r from-primary to-primary-container text-[#3c2f00] text-center uppercase text-[12px] tracking-[0.1em] font-medium transition-all duration-[500ms] ease-out hover:brightness-110 hover:-translate-y-1 hover:shadow-[0_10px_40px_-10px_rgba(255,255,255,0.1)] active:scale-95 shadow-ambient">
               Enter Exhibition
             </Link>
-            <Link href="/learning" className="px-10 py-5 bg-transparent border border-outline-variant/30 text-center text-text uppercase text-[12px] tracking-[0.1em] font-medium transition-all duration-[600ms] ease-editorial hover:bg-surface-highest/20">
+            <Link href="/learning" className="px-10 py-5 bg-transparent border border-outline-variant/30 text-center text-text uppercase text-[12px] tracking-[0.1em] font-medium transition-all duration-[500ms] ease-out hover:bg-white/5 hover:border-white/40 hover:-translate-y-1 active:scale-95">
               Sketching Secrets
             </Link>
           </div>

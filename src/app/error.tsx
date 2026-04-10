@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Section } from "@/components/layout/Section";
 
 export default function Error({
@@ -11,10 +12,29 @@ export default function Error({
     error: Error & { digest?: string };
     reset: () => void;
 }) {
+    const router = useRouter();
+
     useEffect(() => {
-        // Log the error to an error reporting service securely
-        console.error(error);
+        // Telemetry hook: Capture structured error payload (Sentry/Datadog ready)
+        const errorPayload = {
+            message: error.message,
+            stack: error.stack,
+            digest: error.digest,
+            url: typeof window !== 'undefined' ? window.location.href : '',
+            timestamp: new Date().toISOString()
+        };
+        console.error("[CRITICAL] Boundary Exception Escaped:", errorPayload);
     }, [error]);
+
+    const handleRecovery = () => {
+        if (error.message.includes('Failed to fetch') || error.message.includes('Load chunk')) {
+            // Hard refresh on network/chunk errors
+            router.refresh();
+        } else {
+            // Soft reset boundary state
+            reset();
+        }
+    };
 
     return (
         <div className="flex-1 flex flex-col bg-background min-h-[70vh]">
@@ -27,7 +47,7 @@ export default function Error({
                     </p>
                     <div className="flex flex-col sm:flex-row justify-center gap-4">
                         <button
-                            onClick={() => reset()}
+                            onClick={handleRecovery}
                             className="px-8 py-4 bg-white text-black text-[11px] uppercase tracking-[0.15em] font-bold transition-all duration-300 hover:bg-gray-200"
                         >
                             Attempt Recovery

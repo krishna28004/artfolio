@@ -171,11 +171,11 @@ export default function CheckoutPage() {
           <div className="flex flex-col gap-3 w-full mb-12">
             <div className="flex justify-between items-center w-full font-sans text-[13px] text-muted uppercase tracking-widest">
               <span>Subtotal</span>
-              <span>{price ? `$${(price / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '---'}</span>
+              <span>{price ? `₹${(price / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '---'}</span>
             </div>
             <div className="flex justify-between items-center w-full font-sans text-[13px] text-primary uppercase tracking-[0.2em]">
               <span>Total Capital</span>
-              <span>{price ? `$${(price / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '---'}</span>
+              <span>{price ? `₹${(price / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '---'}</span>
             </div>
           </div>
 

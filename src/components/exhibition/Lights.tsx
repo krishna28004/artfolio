@@ -1,14 +1,16 @@
 export function Lights() {
     return (
         <>
-            {/* Global Warm Ambience (Low Intensity) */}
-            <ambientLight intensity={0.1} color="#ffcc80" />
+            <hemisphereLight args={["#ffffff", "#222222", 0.5]} />
+            
+            {/* Soft global ambient fill */}
+            <ambientLight intensity={0.3} color="#fffcf5" />
 
-            {/* High-Level Soft Fill Lights for a 'Glow' look */}
-            <pointLight position={[15, 6, 15]} intensity={0.5} color="#ffd4a3" distance={30} decay={2} />
-            <pointLight position={[-15, 6, 15]} intensity={0.5} color="#ffd4a3" distance={30} decay={2} />
-            <pointLight position={[0, 6, -15]} intensity={0.8} color="#ffd4a3" distance={40} decay={1.5} />
-            <pointLight position={[0, 6, 25]} intensity={0.4} color="#ffd4a3" distance={30} decay={2} />
+            {/* Subtle volumetric fill lights to create hot-spots in the gallery */}
+            <pointLight position={[15, 6, 15]} intensity={1.5} color="#ffedd6" distance={30} decay={2} />
+            <pointLight position={[-15, 6, 15]} intensity={1.5} color="#ffedd6" distance={30} decay={2} />
+            <pointLight position={[0, 6, -15]} intensity={1.8} color="#ffedd6" distance={40} decay={1.5} />
+            <pointLight position={[0, 6, 25]} intensity={1.2} color="#ffedd6" distance={30} decay={2} />
         </>
     );
 }

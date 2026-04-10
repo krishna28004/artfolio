@@ -1,7 +1,7 @@
 "use client";
 import React, { Suspense, useCallback } from "react";
-import { Canvas } from "@react-three/fiber";
-import { Environment } from "@react-three/drei";
+import { Canvas, ThreeEvent, useThree } from "@react-three/fiber";
+import { Environment, ContactShadows, BakeShadows } from "@react-three/drei";
 import * as THREE from "three";
 
 import { Room } from "./Room";
@@ -10,6 +10,17 @@ import { Controls, walkToTarget } from "./Controls";
 import { ArtworkFrame } from "./ArtworkFrame";
 import { Plant, Bench, PersonSilhouette } from "./Props";
 import { HangingOrb, BeamSpotlight } from "./ExhibitionProps";
+
+function WebGLCleanup() {
+    const { gl } = useThree();
+    React.useEffect(() => {
+        return () => {
+            gl.dispose();
+            gl.forceContextLoss();
+        };
+    }, [gl]);
+    return null;
+}
 
 const ARTWORKS = [
     // Left Wall (West) — spaced along Z axis
@@ -30,7 +41,6 @@ const ARTWORKS = [
 ];
 
 /* The clickable floor plane that handles double-click walk-to */
-import { ThreeEvent } from "@react-three/fiber";
 
 function WalkableFloor() {
     const handleDoubleClick = useCallback((e: ThreeEvent<MouseEvent>) => {
@@ -64,12 +74,17 @@ export function GalleryScene() {
             gl={{ antialias: true, powerPreference: "high-performance", stencil: false }}
             className="w-full h-full bg-[#080808]"
         >
+            <WebGLCleanup />
             <Suspense fallback={null}>
-                <Environment preset="night" />
+                <Environment preset="city" />
                 <Lights />
                 <Room />
                 <Controls />
                 <WalkableFloor />
+                
+                {/* Floor Shadows Optimized */}
+                <ContactShadows resolution={1024} scale={100} blur={2.5} opacity={0.5} far={10} position={[0, 0.02, 0]} />
+                <BakeShadows />
 
                 {/* Artworks & Targeted Spotlights */}
                 {ARTWORKS.map((art, i) => (

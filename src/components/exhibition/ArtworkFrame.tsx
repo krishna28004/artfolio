@@ -1,4 +1,5 @@
 "use client";
+import React, { useEffect } from "react";
 import { useTexture } from "@react-three/drei";
 import * as THREE from "three";
 
@@ -22,20 +23,17 @@ export function ArtworkFrame({
     // eslint-disable-next-line react-hooks/immutability
     texture.minFilter = THREE.LinearMipmapLinearFilter;
 
+    // Aggressive garbage collection on unmount
+    useEffect(() => {
+        return () => {
+            texture.dispose();
+        };
+    }, [texture]);
+
     return (
         <group position={position} rotation={rotation} scale={scale}>
 
-            {/* Warm Gallery Track Spotlight */}
-            <spotLight
-                position={[0, 2.5, 2]}
-                target-position={[0, 0, 0]}
-                angle={0.6}
-                penumbra={0.7}
-                intensity={3}
-                color="#ffebd6"
-                distance={8}
-                castShadow={false}
-            />
+            {/* Light is now beautifully handled by BeamSpotlight over this frame. */}
 
             {/* Frame Outer Border (Thin Black Wood) */}
             <mesh position={[0, 0, 0]}>
@@ -49,13 +47,13 @@ export function ArtworkFrame({
                 <meshStandardMaterial color="#f0f0f0" roughness={1} />
             </mesh>
 
-            {/* Canvas Artwork — purely visual, NO click navigation */}
+            {/* Canvas Artwork — purely visual */}
             <mesh position={[0, 0, 0.035]}>
                 <planeGeometry args={[0.9, 0.9]} />
                 <meshStandardMaterial
                     map={texture}
-                    roughness={0.6}
-                    metalness={0.1}
+                    roughness={0.3}
+                    metalness={0.15}
                 />
             </mesh>
         </group>

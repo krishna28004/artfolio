@@ -66,7 +66,7 @@ export function ArtCard({ artwork, index = 0 }: ArtCardProps) {
         <div className="flex justify-between items-baseline">
           <p className="font-sans text-[13px] text-muted font-light">{artwork.artist}</p>
           {artwork.price && artwork.isAvailable && (
-            <p className="font-sans text-[12px] text-primary tracking-widest">${artwork.price.toLocaleString()}</p>
+            <p className="font-sans text-[12px] text-primary tracking-widest">₹{artwork.price.toLocaleString()}</p>
           )}
           {!artwork.isAvailable && (
             <p className="font-sans text-[10px] text-muted/50 tracking-[0.2em] uppercase">Sold</p>
