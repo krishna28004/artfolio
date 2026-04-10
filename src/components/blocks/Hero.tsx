@@ -45,9 +45,10 @@ export function Hero() {
                 src="/images/artist/krishna.jpg"
                 alt="Krishna Kumar — Artist"
                 fill
-                sizes="(max-width: 1024px) 100vw, 50vw"
+                sizes="(max-width: 1024px) 100vw, 512px"
                 className="object-cover object-top transition-all duration-[3000ms] ease-[cubic-bezier(0.2,1,0.3,1)] group-hover:scale-[1.05] grayscale-[15%] contrast-[1.05] brightness-[0.92]"
                 priority
+                loading="eager"
               />
 
               {/* Archival Overlay (Noise & Vignette) */}
