@@ -7,7 +7,7 @@ import * as THREE from "three";
 
 const SPEED = 4;
 const WALK_TO_SPEED = 3;
-const BOUNDARY = { minX: -14, maxX: 14, minZ: -24, maxZ: 24 };
+const BOUNDARY = { minX: -23, maxX: 23, minZ: -38, maxZ: 38 };
 
 /* Global movement state driven by on-screen HTML buttons */
 export const movementState = {
@@ -46,6 +46,8 @@ export function Controls() {
         };
     }, [camera]);
 
+    const velocity = useRef(new THREE.Vector3());
+
     useFrame((_, delta) => {
         const safeDelta = Math.min(delta, 0.1);
         const k = keys.current;
@@ -53,18 +55,12 @@ export function Controls() {
 
         // --- Double-click walk-to logic ---
         if (walkToTarget.active) {
-            const dx = walkToTarget.x - camera.position.x;
-            const dz = walkToTarget.z - camera.position.z;
-            const dist = Math.sqrt(dx * dx + dz * dz);
-
-            if (dist < 0.3) {
+            camera.position.x = THREE.MathUtils.damp(camera.position.x, walkToTarget.x, 3, safeDelta);
+            camera.position.z = THREE.MathUtils.damp(camera.position.z, walkToTarget.z, 3, safeDelta);
+            
+            const distSq = Math.pow(walkToTarget.x - camera.position.x, 2) + Math.pow(walkToTarget.z - camera.position.z, 2);
+            if (distSq < 0.02) {
                 walkToTarget.active = false;
-            } else {
-                const step = Math.min(WALK_TO_SPEED * safeDelta, dist);
-                camera.position.x += (dx / dist) * step;
-                camera.position.z += (dz / dist) * step;
-                camera.position.x = Math.max(BOUNDARY.minX, Math.min(BOUNDARY.maxX, camera.position.x));
-                camera.position.z = Math.max(BOUNDARY.minZ, Math.min(BOUNDARY.maxZ, camera.position.z));
             }
             camera.position.y = 1.7;
             return; // skip manual movement while auto-walking
@@ -85,10 +81,20 @@ export function Controls() {
         if (k.has("KeyD") || k.has("ArrowRight") || m.right) dir.add(right);
 
         if (dir.lengthSq() > 0) {
-            dir.normalize().multiplyScalar(SPEED * safeDelta);
-            camera.position.x = Math.max(BOUNDARY.minX, Math.min(BOUNDARY.maxX, camera.position.x + dir.x));
-            camera.position.z = Math.max(BOUNDARY.minZ, Math.min(BOUNDARY.maxZ, camera.position.z + dir.z));
+            dir.normalize();
+            velocity.current.add(dir.multiplyScalar(25 * safeDelta)); // acceleration
         }
+
+        // Apply friction
+        velocity.current.multiplyScalar(0.82); 
+        if (velocity.current.lengthSq() < 0.001) velocity.current.set(0, 0, 0);
+
+        camera.position.x += velocity.current.x * safeDelta;
+        camera.position.z += velocity.current.z * safeDelta;
+
+        // Strict boundary clamping
+        camera.position.x = Math.max(BOUNDARY.minX, Math.min(BOUNDARY.maxX, camera.position.x));
+        camera.position.z = Math.max(BOUNDARY.minZ, Math.min(BOUNDARY.maxZ, camera.position.z));
         camera.position.y = 1.7;
     });
 

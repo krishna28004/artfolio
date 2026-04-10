@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Loader } from "@react-three/drei";
 import { GalleryScene } from "@/components/exhibition/GalleryScene";
@@ -16,6 +16,33 @@ function release(dir: "forward" | "backward" | "left" | "right") {
 
 export default function ExhibitionPage() {
     const [entered, setEntered] = useState(false);
+    const [showWalkHint, setShowWalkHint] = useState(false);
+
+    // Fade in walk hint after entry, fade out after 6 seconds
+    useEffect(() => {
+        if (entered) {
+            setShowWalkHint(true);
+            const timer = setTimeout(() => {
+                setShowWalkHint(false);
+            }, 6000);
+            return () => clearTimeout(timer);
+        }
+    }, [entered]);
+
+    // Fast-vanish walk hint if they start interacting
+    useEffect(() => {
+        if (!showWalkHint) return;
+        const dismiss = () => setShowWalkHint(false);
+        // Bind to common walking triggers so the tip instantly hides when they "get it"
+        window.addEventListener("dblclick", dismiss);
+        window.addEventListener("keydown", dismiss);
+        window.addEventListener("pointerdown", dismiss);
+        return () => {
+            window.removeEventListener("dblclick", dismiss);
+            window.removeEventListener("keydown", dismiss);
+            window.removeEventListener("pointerdown", dismiss);
+        };
+    }, [showWalkHint]);
 
     return (
         <div className="relative w-screen h-screen overflow-hidden bg-[#0d0d0d] select-none">
@@ -78,6 +105,16 @@ export default function ExhibitionPage() {
                     {/* Crosshair */}
                     <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
                         <div className="w-1.5 h-1.5 rounded-full bg-white/30"></div>
+                    </div>
+
+                    {/* Walk Hint Popup */}
+                    <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 translate-y-12 z-40 pointer-events-none transition-all duration-1000 ${showWalkHint ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
+                        <div className="bg-black/60 backdrop-blur-md border border-white/10 px-6 py-3 rounded-full flex items-center justify-center gap-3">
+                            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+                            <p className="font-sans text-[11px] uppercase tracking-[0.15em] text-white/90 whitespace-nowrap">
+                                Navigate pointer to floor &amp; double-click to move
+                            </p>
+                        </div>
                     </div>
 
                     {/* ========== ON-SCREEN NAVIGATION BUTTONS ========== */}

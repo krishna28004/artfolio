@@ -11,24 +11,30 @@ interface ArtworkFrameProps {
     scale?: [number, number, number];
 }
 
+import { useThree } from "@react-three/fiber";
+
 export function ArtworkFrame({
     url,
     position,
     rotation = [0, 0, 0],
     scale = [1.5, 2, 1],
 }: Omit<ArtworkFrameProps, "id">) {
+    const { gl } = useThree();
     const texture = useTexture(url);
     // eslint-disable-next-line react-hooks/immutability
     texture.colorSpace = THREE.SRGBColorSpace;
     // eslint-disable-next-line react-hooks/immutability
     texture.minFilter = THREE.LinearMipmapLinearFilter;
 
-    // Aggressive garbage collection on unmount
+    // Apply HD texture filtering and GC on unmount
     useEffect(() => {
+        texture.anisotropy = gl.capabilities.getMaxAnisotropy();
+        texture.needsUpdate = true;
+        
         return () => {
             texture.dispose();
         };
-    }, [texture]);
+    }, [texture, gl]);
 
     return (
         <group position={position} rotation={rotation} scale={scale}>

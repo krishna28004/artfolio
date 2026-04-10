@@ -1,7 +1,7 @@
 "use client";
 import React, { Suspense, useCallback } from "react";
 import { Canvas, ThreeEvent, useThree } from "@react-three/fiber";
-import { Environment, ContactShadows, BakeShadows } from "@react-three/drei";
+import { Environment, ContactShadows, BakeShadows, PerformanceMonitor, Preload } from "@react-three/drei";
 import * as THREE from "three";
 
 import { Room } from "./Room";
@@ -66,14 +66,16 @@ function WalkableFloor() {
 }
 
 export function GalleryScene() {
+    const [dpr, setDpr] = React.useState(1.5);
     return (
         <Canvas
             shadows
             camera={{ position: [0, 1.7, 30], fov: 60 }}
-            dpr={[1, 1.5]}
+            dpr={dpr}
             gl={{ antialias: true, powerPreference: "high-performance", stencil: false }}
             className="w-full h-full bg-[#080808]"
         >
+            <PerformanceMonitor onIncline={() => setDpr(1.5)} onDecline={() => setDpr(0.75)} />
             <WebGLCleanup />
             <Suspense fallback={null}>
                 <Environment preset="city" />
@@ -132,6 +134,7 @@ export function GalleryScene() {
                 <PersonSilhouette position={[-5, 0, -35]} rotation={[0, 0, 0]} />
 
             </Suspense>
+            <Preload all />
         </Canvas>
     );
 }
