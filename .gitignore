@@ -23,6 +23,8 @@
 # misc
 .DS_Store
 *.pem
+lint_log.txt
+lint_report.json
 
 # debug
 npm-debug.log*
