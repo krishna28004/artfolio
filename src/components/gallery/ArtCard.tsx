@@ -1,11 +1,11 @@
 "use client";
 import Image from "next/image";
 import Link from "next/link";
-import { Artwork } from "@/lib/data/placeholders";
+import { Artwork } from "@/features/artwork/data/artworks";
 import { Skeleton } from "@/components/ui/Skeleton";
 
 import { Heart } from "lucide-react";
-import { useFavorites } from "@/hooks/useFavorites";
+import { useFavorites } from "@/features/favorites/hooks/use-favorites";
 
 interface ArtCardProps {
   artwork: Artwork;

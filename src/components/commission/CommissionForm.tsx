@@ -5,8 +5,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { Button } from "@/components/ui/Button";
-import { commissionSchema, CommissionFormData } from "@/lib/validations";
-import { uploadImageToCloudinary } from "@/lib/cloudinary";
+import {
+  commissionSchema,
+  CommissionFormData,
+} from "@/features/commission/schema/commission-schema";
+import { uploadImageToCloudinary } from "@/shared/services/cloudinary";
 
 interface CommissionFormProps {
   initialReference?: string;

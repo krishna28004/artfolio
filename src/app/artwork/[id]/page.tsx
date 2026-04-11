@@ -4,11 +4,11 @@ import { ArtworkInfo } from "@/components/artwork/ArtworkInfo";
 import Link from "next/link";
 
 import { notFound } from "next/navigation";
-import { placeholders } from "@/lib/data/placeholders";
+import { artworks } from "@/features/artwork/data/artworks";
 
 // Server-side data resolution mock
 async function getArtwork(id: string) {
-  const artwork = placeholders.find(a => a.id === id);
+  const artwork = artworks.find((a) => a.id === id);
   if (!artwork) return null;
 
   return {

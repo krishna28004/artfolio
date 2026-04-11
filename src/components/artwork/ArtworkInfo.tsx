@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { Eye, Heart, Share2, Check } from "lucide-react";
-import { useFavorites } from "@/hooks/useFavorites";
-import { useViewCount } from "@/hooks/useViewCount";
+import { useFavorites } from "@/features/favorites/hooks/use-favorites";
+import { useViewCount } from "@/features/artwork/hooks/use-view-count";
 
 // Next.js dynamic imperative import explicitly skipping SSR to prevent Canvas initialization fatal crashes
 const WallFitOverlay = dynamic(
@@ -146,4 +146,3 @@ export function ArtworkInfo({ id, title, artist, year, medium, dimensions, descr
     </>
   );
 }
-

@@ -1,14 +1,14 @@
 "use client";
 import { Section } from "@/components/layout/Section";
 import { ArtCard } from "@/components/gallery/ArtCard";
-import { placeholders } from "@/lib/data/placeholders";
-import { useFavorites } from "@/hooks/useFavorites";
+import { artworks } from "@/features/artwork/data/artworks";
+import { useFavorites } from "@/features/favorites/hooks/use-favorites";
 import Link from "next/link";
 
 export default function SavedPage() {
     const { favorites } = useFavorites();
 
-    const savedArtworks = placeholders.filter(artwork => favorites.includes(artwork.id));
+    const savedArtworks = artworks.filter((artwork) => favorites.includes(artwork.id));
 
     return (
         <div className="flex-1 flex flex-col bg-background">

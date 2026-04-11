@@ -4,7 +4,7 @@ import Script from "next/script";
 import { useParams } from "next/navigation";
 import { Section } from "@/components/layout/Section";
 import { Button } from "@/components/ui/Button";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/shared/services/supabase";
 
 // Native binding requirement for Razorpay
 interface RazorpayResponse {

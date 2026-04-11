@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { commissionSchema } from "@/lib/validations";
-import { supabase } from "@/lib/supabase";
-import { deleteImageFromCloudinary } from "@/lib/cloudinary";
+import { commissionSchema } from "@/features/commission/schema/commission-schema";
+import { supabase } from "@/shared/services/supabase";
+import { deleteImageFromCloudinary } from "@/shared/services/cloudinary";
 import { Resend } from "resend";
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";

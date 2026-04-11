@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Container } from "./Container";
 import { Sidebar } from "./Sidebar";
 import { Heart } from "lucide-react";
-import { useFavorites } from "@/hooks/useFavorites";
+import { useFavorites } from "@/features/favorites/hooks/use-favorites";
 
 export function Navbar() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);

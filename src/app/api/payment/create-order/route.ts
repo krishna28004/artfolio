@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { razorpay } from "@/lib/razorpay";
-import { supabase } from "@/lib/supabase";
+import { razorpay } from "@/shared/services/razorpay";
+import { supabase } from "@/shared/services/supabase";
 
 export async function POST(req: Request) {
   try {
