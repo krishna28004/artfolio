@@ -67,7 +67,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
                 <div className="mt-auto border-t border-white/10 pt-8 flex flex-col gap-4">
                     <p className="font-sans text-[11px] uppercase tracking-[0.2em] text-muted">Contact</p>
-                    <a href="mailto:krishna@example.com" className="font-sans text-[14px] text-text hover:text-primary transition-colors">krishna@example.com</a>
+                    <a href="https://mail.google.com/mail/?view=cm&to=krishnakumar2811004@gmail.com" target="_blank" rel="noopener noreferrer" className="font-sans text-[14px] text-text hover:text-primary transition-colors">krishnakumar2811004@gmail.com</a>
                 </div>
             </div>
         </>

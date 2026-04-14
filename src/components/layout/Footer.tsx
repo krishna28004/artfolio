@@ -8,8 +8,8 @@ export function Footer() {
                 </div>
                 <div className="flex gap-8">
                     <a href="https://www.instagram.com/krishnakumar_artss?igsh=MTk4N2o3czloN2kyMA==" target="_blank" rel="noopener noreferrer" className="font-sans text-[12px] uppercase tracking-widest text-muted hover:text-white transition-colors duration-500">Instagram</a>
-                    <a href="#" className="font-sans text-[12px] uppercase tracking-widest text-muted hover:text-white transition-colors duration-500">Twitter</a>
-                    <a href="#" className="font-sans text-[12px] uppercase tracking-widest text-muted hover:text-white transition-colors duration-500">Legal</a>
+                    <a href="https://mail.google.com/mail/?view=cm&to=krishnakumar2811004@gmail.com" target="_blank" rel="noopener noreferrer" className="font-sans text-[12px] uppercase tracking-widest text-muted hover:text-white transition-colors duration-500">Mail</a>
+                    <a href="https://www.linkedin.com/in/krishna-kumar-8352aa33a/" target="_blank" rel="noopener noreferrer" className="font-sans text-[12px] uppercase tracking-widest text-muted hover:text-white transition-colors duration-500">LinkedIn</a>
                 </div>
             </div>
         </footer>

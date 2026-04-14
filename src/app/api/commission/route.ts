@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { commissionSchema } from "@/features/commission/schema/commission-schema";
-import { supabase } from "@/shared/services/supabase";
+import { supabaseAdmin } from "@/shared/services/supabase-admin";
 import { deleteImageFromCloudinary } from "@/shared/services/cloudinary";
 import { Resend } from "resend";
 import { Ratelimit } from "@upstash/ratelimit";
@@ -27,8 +27,8 @@ export async function POST(req: Request) {
     // 2. Strict Server Zod Validation
     const validData = commissionSchema.parse(body);
 
-    // 3. Database Layer Safeguard
-    const { error: dbError } = await supabase
+    // 3. Database Layer — using service role client to bypass RLS
+    const { error: dbError } = await supabaseAdmin
       .from("commissions")
       .insert([{
         idempotency_key: validData.idempotencyKey,
@@ -42,21 +42,31 @@ export async function POST(req: Request) {
       }]);
 
     if (dbError) {
-      // Postgres Unique Violation (IDEMPOTENCY CATCH)
+      // Postgres Unique Violation (IDEMPOTENCY CATCH) — safe to treat as success
       if (dbError.code === '23505') {
         console.log(`[IDEMPOTENCY_INTERCEPT] Prevented duplicate payload for key: ${validData.idempotencyKey}`);
         return NextResponse.json({ success: true, message: "Request secured safely." });
       }
 
-      console.error("[DB_FATAL]:", dbError);
+      // Log full error details to Vercel logs for diagnosis
+      console.error("[DB_FATAL] Supabase insert failed.", {
+        code: dbError.code,
+        message: dbError.message,
+        details: dbError.details,
+        hint: dbError.hint,
+      });
 
-      // ORPHAN CLOUDINARY DESTRUCTION CATCH
+      // ORPHAN CLOUDINARY DESTRUCTION CATCH — clean up uploaded image if DB save failed
       if (validData.publicId) {
         console.log(`[DB_FATAL] Initiating CDN cleanup for public_id: ${validData.publicId}`);
         await deleteImageFromCloudinary(validData.publicId);
       }
 
-      // We log the error but still return 200 locally if unconfigured to prevent frontend crashes during testing.
+      // Return a real error so the user knows the submission did NOT go through
+      return NextResponse.json(
+        { success: false, message: "We could not save your request. Please try again shortly." },
+        { status: 500 }
+      );
     }
 
     // 4. Secure Async Email Escalation (DEGRADED EMAIL FALLBACK)
