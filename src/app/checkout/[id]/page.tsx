@@ -46,8 +46,29 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     const fetchPrice = async () => {
-      const { data } = await supabase.from('commissions').select('price').eq('id', commissionId).single();
-      if (data?.price) setPrice(data.price);
+      if (!commissionId) return;
+      
+      console.log(`[CHECKOUT_INIT] Fetching price for allocation: ${commissionId}`);
+      
+      const { data, error } = await supabase
+        .from('commissions')
+        .select('price')
+        .eq('id', commissionId)
+        .single();
+
+      if (error) {
+        console.error("[CHECKOUT_DB_ERROR]", error.message, error.details);
+        setFailReason("This acquisition link has expired or is invalid. Please verify the ID.");
+        return;
+      }
+
+      if (data && typeof data.price === 'number') {
+        console.log(`[CHECKOUT_SUCCESS] Price loaded: ₹${data.price / 100}`);
+        setPrice(data.price);
+      } else {
+        console.warn("[CHECKOUT_STATE_WARN] Commission found but price is unassigned.");
+        setFailReason("The curator has not assigned a capital allocation value to this request yet.");
+      }
     };
     fetchPrice();
   }, [commissionId]);
