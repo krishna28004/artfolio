@@ -4,73 +4,63 @@ import Link from "next/link";
 
 export function Hero() {
   return (
-    <Section className="min-h-[90vh] pb-32 pt-24 lg:pt-0 flex items-center overflow-hidden">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-0 items-center w-full">
+    <Section className="min-h-[90vh] pt-32 lg:pt-0 flex items-center justify-center relative overflow-hidden">
+      
+      {/* 1. BACKGROUND INTEGRATION (Subtle Space Utilization) */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden">
+        <span className="font-serif text-[clamp(6rem,18vw,20rem)] font-bold text-white/[0.03] select-none whitespace-nowrap">
+          ARTFOLIO
+        </span>
+        {/* Soft radial glow behind the composition to elevate the premium feel */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80vw] h-[80vw] max-w-[1000px] max-h-[1000px] bg-white/[0.02] rounded-full blur-[120px]"></div>
+      </div>
 
-        {/* LEFT: Text Block */}
-        <div className="lg:col-span-5 flex flex-col items-start z-10 animate-reveal stagger-1">
-          <h1 className="font-serif text-[44px] md:text-[64px] leading-[1.05] tracking-[-0.02em] text-text mb-6">
-            Handmade Pencil Sketches by Krishna Kumar
-          </h1>
+      {/* 2. LAYOUT STRUCTURE (Strict Flexbox for zero cropping/overflow issues) */}
+      <div className="w-full flex items-center justify-center relative z-10">
+        <div className="flex flex-col lg:flex-row items-center justify-between w-full max-w-[1440px] mx-auto gap-12 lg:gap-8">
 
-          <p className="font-sans text-[16px] leading-[1.6] font-light text-muted max-w-md mb-10">
-            A curated portfolio of painstaking graphite mastery. Explore raw, artisanal artwork crafted through traditional hand-sketching techniques.
-          </p>
+          {/* LEFT: Text Block */}
+          {/* Constrained width to ensure balance against the image block */}
+          <div className="w-full lg:w-[45%] flex flex-col items-center lg:items-start text-center lg:text-left shrink-0 animate-reveal stagger-1">
+            <h1 className="font-serif text-[clamp(2.5rem,6vw,5rem)] leading-[1.05] tracking-tight text-white mb-6">
+              Handmade Pencil Sketches by Krishna Kumar
+            </h1>
+            <p className="font-sans text-base lg:text-lg leading-[1.7] font-light text-white/70 mb-10 max-w-[420px]">
+              A curated portfolio of painstaking graphite mastery. Explore raw, artisanal artwork crafted through traditional physical techniques.
+            </p>
 
-          <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto mt-6">
-            <Link href="/#gallery" className="px-10 py-5 bg-gradient-to-r from-primary to-primary-container text-[#3c2f00] text-center uppercase text-[12px] tracking-[0.1em] font-medium transition-all duration-[500ms] ease-out hover:brightness-110 hover:-translate-y-1 hover:shadow-[0_10px_40px_-10px_rgba(255,255,255,0.1)] active:scale-95 shadow-ambient">
-              Enter Exhibition
-            </Link>
-            <Link href="/learning" className="px-10 py-5 bg-transparent border border-outline-variant/30 text-center text-text uppercase text-[12px] tracking-[0.1em] font-medium transition-all duration-[500ms] ease-out hover:bg-white/5 hover:border-white/40 hover:-translate-y-1 active:scale-95">
-              Sketching Secrets
-            </Link>
+            <div className="flex flex-col sm:flex-row gap-6 w-full sm:w-auto items-center">
+              <Link href="/#gallery" className="px-10 py-4 bg-white text-black transition-all hover:bg-white/90 hover:scale-[1.02] uppercase text-[12px] tracking-[0.2em] font-medium shadow-[0_0_30px_rgba(255,255,255,0.1)]">
+                Enter Exhibition
+              </Link>
+              <Link href="/learning" className="group flex items-center gap-3 text-white/60 hover:text-white transition-colors uppercase text-[12px] tracking-[0.2em] font-medium">
+                <span>The Process</span>
+                <span className="block w-6 h-[1px] bg-white/30 group-hover:bg-white group-hover:w-10 transition-all duration-[800ms] ease-editorial"></span>
+              </Link>
+            </div>
           </div>
-        </div>
 
-        {/* RIGHT: Refined Illustration Card */}
-        <div className="lg:col-span-6 lg:col-start-7 w-full animate-reveal stagger-2" style={{ animationDuration: '1200ms' }}>
-          <div className="group relative w-full max-w-lg mx-auto lg:ml-auto">
-
-            {/* Premium Separation Glow */}
-            <div className="absolute -inset-10 bg-primary/5 rounded-full blur-[100px] opacity-20 group-hover:opacity-40 transition-opacity duration-1000 z-0"></div>
-
-            {/* The "Card" Container — Properly Rounded and Sized */}
-            <div className="relative aspect-square w-full rounded-[48px] overflow-hidden bg-black/40 border border-white/5 shadow-[0_32px_80px_-15px_rgba(0,0,0,0.8)] p-4 sm:p-8 transition-all duration-700 group-hover:border-white/10 group-hover:shadow-ambient">
-              
-              {/* Subtle inner gold rim light effect */}
-              <div className="absolute inset-0 rounded-[48px] border border-primary/5 pointer-events-none z-10"></div>
-              
-              <div className="relative w-full h-full">
-                <Image
-                  src="/images/artist/illustratedme.png"
-                  alt="Krishna Kumar — Artist Design"
-                  fill
-                  sizes="(max-width: 1024px) 100vw, 512px"
-                  className="object-contain object-center transition-all duration-[2000ms] ease-out group-hover:scale-[1.02] contrast-[1.1] brightness-[1.02]"
-                  priority
-                  loading="eager"
-                />
-              </div>
-
-              {/* Glassy Overlay for depth */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-white/5 pointer-events-none opacity-50"></div>
-            </div>
-
-            {/* Captions below */}
-            <div className="mt-8 flex justify-between items-end border-l border-primary/20 pl-6 h-10">
-              <div className="animate-reveal stagger-3">
-                <p className="font-serif text-[18px] text-text/90 italic tracking-wide">Krishna Kumar</p>
-                <p className="font-sans text-[10px] uppercase tracking-[0.3em] text-muted/40 mt-1 font-medium">Bespoke Pencil Artist</p>
-              </div>
-              <div className="flex flex-col items-end opacity-20 group-hover:opacity-40 transition-opacity duration-700">
-                <p className="font-sans text-[8px] uppercase tracking-[0.2em] text-muted">Aest. Profile</p>
-                <p className="font-sans text-[10px] uppercase tracking-[0.2em] text-muted mt-0.5">MMXXIV</p>
-              </div>
-            </div>
+          {/* RIGHT: Image Container (Zero Distortion & Zero Cropping Guarantee) */}
+          <div className="w-full lg:w-[55%] flex justify-center lg:justify-end items-center relative animate-reveal stagger-2">
             
-          </div>
-        </div>
+            {/* The image wrapper naturally adapts to image dimensions. No fixed aspect ratios. */}
+            <div className="relative w-full max-w-[800px] flex justify-center lg:justify-end items-center">
+              
+              {/* Note: explicit width/height ensures native aspect ratio is loaded, while w-full/h-auto scales it dynamically. object-contain provides safety fallback. */}
+              <Image
+                src="/images/artist/illustratedme.png"
+                alt="Krishna Kumar — Artist Profile"
+                width={1200}
+                height={1200}
+                className="w-full h-auto max-h-[80vh] object-contain object-center lg:object-right transition-transform duration-[1500ms] ease-editorial motion-safe:hover:scale-[1.02]"
+                priority
+              />
 
+            </div>
+
+          </div>
+
+        </div>
       </div>
     </Section>
   );

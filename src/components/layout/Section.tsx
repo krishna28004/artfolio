@@ -10,7 +10,7 @@ interface SectionProps {
 
 export function Section({ children, className = "", containerClassName = "", id }: SectionProps) {
   return (
-    <section id={id} className={`py-12 md:py-16 lg:py-24 ${className}`}>
+    <section id={id} className={`py-16 md:py-24 lg:py-32 relative ${className}`}>
       <Container className={containerClassName}>
         {children}
       </Container>

@@ -35,14 +35,11 @@ const config: Config = {
         'ambient': '0 24px 48px rgba(0, 0, 0, 0.5)',
       },
       transitionTimingFunction: {
-        'editorial': 'cubic-bezier(0.22, 1, 0.36, 1)',
+        'editorial': 'cubic-bezier(0.2, 0.8, 0.2, 1)',
       },
-      container: {
-        center: true,
-        padding: "var(--container-padding)",
-        screens: {
-          "2xl": "var(--container-max-width)",
-        },
+      transitionDuration: {
+        'luxury': '1200ms',
+        'luxury-fast': '800ms',
       },
     },
   },

@@ -4,12 +4,12 @@
 
 @layer base {
   :root {
-    --bg: #131313;
-    --bg-low: #1c1b1b;
-    --bg-lowest: #0e0e0e;
-    --bg-highest: #353534;
-    --accent: #f2ca50;
-    --accent-container: #d4af37;
+    --bg: #0A0A0A;
+    --bg-low: #111111;
+    --bg-lowest: #050505;
+    --bg-highest: #1a1a1a;
+    --accent: #E5E0D8;
+    --accent-container: #D4D0C8;
     --text: #e5e2e1;
     --muted: #A0A0A0;
     --outline: #99907c;
@@ -19,9 +19,9 @@
     --container-max-width: 1400px;
 
     /* Luxury Animation Tokens */
-    --ease-editorial: cubic-bezier(0.25, 1, 0.5, 1);
-    --duration-standard: 400ms;
-    --duration-slow: 700ms;
+    --ease-editorial: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --duration-standard: 800ms;
+    --duration-slow: 1200ms;
   }
 }
 
