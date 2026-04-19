@@ -4,7 +4,7 @@ import Link from "next/link";
 
 export function Hero() {
   return (
-    <Section className="min-h-[90vh] pt-32 lg:pt-0 flex items-center justify-center relative overflow-hidden">
+    <Section className="min-h-[100svh] pt-32 lg:pt-0 flex items-center justify-center relative overflow-hidden">
       
       {/* 1. BACKGROUND INTEGRATION (Subtle Space Utilization) */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden">
@@ -30,12 +30,12 @@ export function Hero() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-6 w-full sm:w-auto items-center">
-              <Link href="/#gallery" className="px-10 py-4 bg-white text-black transition-all hover:bg-white/90 hover:scale-[1.02] uppercase text-[12px] tracking-[0.2em] font-medium shadow-[0_0_30px_rgba(255,255,255,0.1)]">
+              <Link href="/#gallery" className="px-10 py-4 bg-white text-black transition-all lg:hover:bg-white/90 lg:hover:scale-[1.02] active:scale-95 uppercase text-[12px] tracking-[0.2em] font-medium shadow-[0_0_30px_rgba(255,255,255,0.1)]">
                 Enter Exhibition
               </Link>
-              <Link href="/learning" className="group flex items-center gap-3 text-white/60 hover:text-white transition-colors uppercase text-[12px] tracking-[0.2em] font-medium">
+              <Link href="/learning" className="group flex items-center gap-3 text-white/60 lg:hover:text-white transition-colors uppercase text-[12px] tracking-[0.2em] font-medium">
                 <span>The Process</span>
-                <span className="block w-6 h-[1px] bg-white/30 group-hover:bg-white group-hover:w-10 transition-all duration-[800ms] ease-editorial"></span>
+                <span className="block w-6 h-[1px] bg-white/30 lg:group-hover:bg-white lg:group-hover:w-10 transition-all duration-[800ms] ease-editorial"></span>
               </Link>
             </div>
           </div>

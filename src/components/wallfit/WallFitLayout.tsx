@@ -22,6 +22,8 @@ export function WallFitLayout({ artworkUrl, onClose }: WallFitLayoutProps) {
     }
   }, [scale, skewX, step]);
 
+  const [isProcessing, setIsProcessing] = useState(false);
+
   const handleRoomUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -31,7 +33,13 @@ export function WallFitLayout({ artworkUrl, onClose }: WallFitLayoutProps) {
     reader.onload = (f) => {
       const data = f.target?.result as string;
       const img = new Image();
-      img.onload = () => {
+      img.onload = async () => {
+        setIsProcessing(true);
+        // Yield to let react render loading state
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        // Fallback timeout to guarantee UI paint flush on slow devices
+        await new Promise(resolve => setTimeout(resolve, 50));
+
         const canvas = document.createElement("canvas");
         const MAX_WIDTH = 1920;
         const resizeRatio = Math.min(MAX_WIDTH / img.width, 1);
@@ -54,6 +62,7 @@ export function WallFitLayout({ artworkUrl, onClose }: WallFitLayoutProps) {
         img.src = "";
         canvas.width = 0;
         canvas.height = 0;
+        setIsProcessing(false);
       };
       img.src = data;
     };
@@ -67,10 +76,10 @@ export function WallFitLayout({ artworkUrl, onClose }: WallFitLayoutProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-xl flex flex-col md:flex-row animate-in fade-in duration-500">
+    <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-xl flex flex-col md:flex-row h-[100dvh] animate-in fade-in duration-500">
 
       {/* 1. LEFT STAGE: The Canvas Hardware */}
-      <div className="w-full md:w-[70%] h-[60vh] md:h-full relative">
+      <div className="w-full relative flex-1 min-h-[40dvh] md:h-full md:w-[70%]">
         <WallFitEngine ref={engineRef} />
 
         {step === 1 && (
@@ -79,8 +88,10 @@ export function WallFitLayout({ artworkUrl, onClose }: WallFitLayoutProps) {
               <h3 className="font-serif text-[28px] text-text mb-3">Initialize Environment</h3>
               <p className="font-sans text-muted text-[14px] mb-10 leading-relaxed">Upload a wide horizontal photograph of your intended physical space to spin up the rendering matrix.</p>
               <div className="relative overflow-hidden cursor-pointer inline-block w-full">
-                <Button className="pointer-events-none w-full tracking-[0.2em] uppercase text-[12px] py-4 bg-white/5 border border-white/10 hover:bg-white/10">Upload Space</Button>
-                <input type="file" accept="image/jpeg, image/png, image/webp" onChange={handleRoomUpload} className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />
+                <Button className="pointer-events-none w-full tracking-[0.2em] uppercase text-[12px] py-4 bg-white/5 border border-white/10 lg:hover:bg-white/10 active:scale-95 transition-all">
+                  {isProcessing ? "Processing Matrix..." : "Upload Space"}
+                </Button>
+                {!isProcessing && <input type="file" accept="image/jpeg, image/png, image/webp" onChange={handleRoomUpload} className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />}
               </div>
             </div>
           </div>
@@ -88,11 +99,11 @@ export function WallFitLayout({ artworkUrl, onClose }: WallFitLayoutProps) {
       </div>
 
       {/* 2. RIGHT STAGE: Tactical Dashboard UX */}
-      <div className="w-full md:w-[30%] h-[40vh] md:h-full bg-[#080808] flex flex-col p-8 md:p-12 justify-between overflow-y-auto">
+      <div className="w-full md:w-[30%] h-auto max-h-[50dvh] md:max-h-full md:h-full bg-[#080808] flex flex-col p-6 md:p-12 justify-between overflow-y-auto">
         <div>
           <div className="flex justify-between items-center mb-10">
             <h2 className="font-serif text-[32px] text-primary tracking-[-0.02em]">WallFit UI</h2>
-            <button onClick={onClose} className="text-muted hover:text-white transition-colors uppercase tracking-[0.2em] text-[10px] font-sans">Close Session</button>
+            <button onClick={onClose} className="p-4 -m-4 text-muted hover:text-white active:scale-90 transition-all uppercase tracking-[0.2em] text-[10px] font-sans">Close Session</button>
           </div>
 
           {step === 1 && (

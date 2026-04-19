@@ -1,9 +1,8 @@
-"use client";
-/* eslint-disable react-hooks/immutability */
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { PointerLockControls } from "@react-three/drei";
 import * as THREE from "three";
+import { ARTWORKS } from "./GalleryScene";
 
 const SPEED = 4;
 const WALK_TO_SPEED = 3;
@@ -25,13 +24,16 @@ export const walkToTarget = {
 };
 
 export function Controls() {
-    const { camera } = useThree();
+    const { camera, gl } = useThree();
     const keys = useRef<Set<string>>(new Set());
+    const targetAlignQuat = useRef<THREE.Quaternion | null>(null);
+    const lastAlignCheck = useRef(0);
+    const tempCamera = useMemo(() => new THREE.PerspectiveCamera(), []);
 
+    // Setup input listeners
     useEffect(() => {
         const down = (e: KeyboardEvent) => {
             keys.current.add(e.code);
-            // Any manual movement cancels auto-walk
             if (["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) {
                 walkToTarget.active = false;
             }
@@ -46,12 +48,118 @@ export function Controls() {
         };
     }, [camera]);
 
+    // Mobile touch-to-look implementation
+    useEffect(() => {
+        let lastTouchX = 0;
+        let lastTouchY = 0;
+        const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+
+        const onTouchStart = (e: TouchEvent) => {
+            if (e.touches.length > 0) {
+                lastTouchX = e.touches[0].pageX;
+                lastTouchY = e.touches[0].pageY;
+            }
+        };
+
+        const onTouchMove = (e: TouchEvent) => {
+            // Only capture look if not using multi-touch
+            if (e.touches.length === 1) {
+                const touchX = e.touches[0].pageX;
+                const touchY = e.touches[0].pageY;
+                const deltaX = touchX - lastTouchX;
+                const deltaY = touchY - lastTouchY;
+
+                euler.setFromQuaternion(camera.quaternion);
+                
+                // Sensitivity modifier
+                euler.y -= deltaX * 0.005;
+                euler.x -= deltaY * 0.005;
+
+                // Pitch clamp: limit to ±40 degrees
+                const limit = 40 * Math.PI / 180;
+                euler.x = Math.max(-limit, Math.min(limit, euler.x));
+
+                camera.quaternion.setFromEuler(euler);
+
+                // Cancel alignment if user manually scrolls
+                targetAlignQuat.current = null;
+
+                lastTouchX = touchX;
+                lastTouchY = touchY;
+            }
+        };
+
+        const domElement = gl.domElement;
+        domElement.addEventListener('touchstart', onTouchStart, { passive: true });
+        domElement.addEventListener('touchmove', onTouchMove, { passive: false }); // allow preventDefault if needed later
+
+        return () => {
+            domElement.removeEventListener('touchstart', onTouchStart);
+            domElement.removeEventListener('touchmove', onTouchMove);
+        };
+    }, [camera, gl.domElement]);
+
     const velocity = useRef(new THREE.Vector3());
 
-    useFrame((_, delta) => {
+    useFrame((state, delta) => {
         const safeDelta = Math.min(delta, 0.1);
         const k = keys.current;
         const m = movementState;
+
+        // --- Soft Auto-Alignment UX logic ---
+        // Throttle proximity scan (0.1s interval = 10Hz) to prevent O(n) frame stall
+        if (state.clock.elapsedTime - lastAlignCheck.current > 0.1) {
+            lastAlignCheck.current = state.clock.elapsedTime;
+            
+            let nearest: typeof ARTWORKS[0] | null = null;
+            let minDist = 6.0; // Only trigger in proximity
+
+            for (const art of ARTWORKS) {
+                const dx = art.position[0] - camera.position.x;
+                const dz = art.position[2] - camera.position.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                if (dist < minDist) {
+                    minDist = dist;
+                    nearest = art;
+                }
+            }
+
+            if (nearest && !walkToTarget.active) {
+                const dirToArt = new THREE.Vector3(
+                    nearest.position[0] - camera.position.x,
+                    nearest.position[1] - camera.position.y,
+                    nearest.position[2] - camera.position.z
+                ).normalize();
+
+                const forward = new THREE.Vector3();
+                camera.getWorldDirection(forward);
+
+                const dot = forward.dot(dirToArt);
+                // Requires strong gaze lock (over 0.85) to avoid feeling "forced"
+                if (dot > 0.85) {
+                    tempCamera.position.copy(camera.position);
+                    // Keep horizon absolutely stable by aligning only yaw
+                    tempCamera.lookAt(nearest.position[0], camera.position.y, nearest.position[2]);
+                    
+                    const angleDiff = camera.quaternion.angleTo(tempCamera.quaternion);
+                    // Deadzone: stop near 0.01 to prevent micro-jitter, and max diff 0.4 keeps it from whipping around
+                    if (angleDiff > 0.01 && angleDiff < 0.4) {
+                        targetAlignQuat.current = tempCamera.quaternion.clone();
+                    } else {
+                        targetAlignQuat.current = null;
+                    }
+                } else {
+                    targetAlignQuat.current = null; // User looked away
+                }
+            } else {
+                targetAlignQuat.current = null;
+            }
+        }
+
+        // Apply smooth slerp if active
+        if (targetAlignQuat.current && !walkToTarget.active) {
+            camera.quaternion.slerp(targetAlignQuat.current, safeDelta * 4);
+        }
 
         // --- Double-click walk-to logic ---
         if (walkToTarget.active) {
@@ -62,7 +170,7 @@ export function Controls() {
             if (distSq < 0.02) {
                 walkToTarget.active = false;
             }
-            camera.position.y = 1.7;
+            camera.position.y = THREE.MathUtils.damp(camera.position.y, 1.7, 5, safeDelta);
             return; // skip manual movement while auto-walking
         }
 
@@ -82,21 +190,27 @@ export function Controls() {
 
         if (dir.lengthSq() > 0) {
             dir.normalize();
-            velocity.current.add(dir.multiplyScalar(25 * safeDelta)); // acceleration
+            velocity.current.add(dir.multiplyScalar(25 * safeDelta)); // Intentionally smooth acceleration
+            
+            // Cancel alignment if user starts walking
+            targetAlignQuat.current = null;
         }
 
-        // Apply friction
+        // Velocity damping (smooth deceleration)
         velocity.current.multiplyScalar(0.82); 
         if (velocity.current.lengthSq() < 0.001) velocity.current.set(0, 0, 0);
 
         camera.position.x += velocity.current.x * safeDelta;
         camera.position.z += velocity.current.z * safeDelta;
 
-        // Strict boundary clamping
+        // Strict boundary clamping to prevent clipping through walls
         camera.position.x = Math.max(BOUNDARY.minX, Math.min(BOUNDARY.maxX, camera.position.x));
         camera.position.z = Math.max(BOUNDARY.minZ, Math.min(BOUNDARY.maxZ, camera.position.z));
-        camera.position.y = 1.7;
+        
+        // Soft Y height handling — damped floor alignment allows realism over strict 1.7 clamp
+        camera.position.y = THREE.MathUtils.damp(camera.position.y, 1.7, 5, safeDelta);
     });
 
-    return <PointerLockControls />;
+    // We use PointerLockControls, locking max/min polar angles to ±40 degrees from horizontal
+    return <PointerLockControls minPolarAngle={Math.PI / 2 - 40 * Math.PI / 180} maxPolarAngle={Math.PI / 2 + 40 * Math.PI / 180} />;
 }
