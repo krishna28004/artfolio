@@ -9,7 +9,6 @@ import { Lights } from "./Lights";
 import { Controls, walkToTarget } from "./Controls";
 import { ArtworkFrame } from "./ArtworkFrame";
 import { Plant, Bench, PersonSilhouette } from "./Props";
-import { HangingOrb, BeamSpotlight } from "./ExhibitionProps";
 
 function WebGLCleanup() {
     const { gl } = useThree();
@@ -40,23 +39,37 @@ export const ARTWORKS = [
     { id: "sorcerer-supreme", url: "/images/artworks/sorcerer-supreme.jpg", position: [10, 2.1, -39.92] as [number, number, number], rotation: [0, 0, 0] as [number, number, number] },
 ];
 
-/* The clickable floor plane that handles double-click walk-to */
+/* The clickable floor plane that handles double-click walk-to and mobile taps */
 
 function WalkableFloor() {
-    const handleDoubleClick = useCallback((e: ThreeEvent<MouseEvent>) => {
-        e.stopPropagation();
-        const point = e.point as THREE.Vector3;
-        // Clamp to safe boundaries for the expanded room
-        walkToTarget.x = Math.max(-23, Math.min(23, point.x));
-        walkToTarget.z = Math.max(-38, Math.min(38, point.z));
-        walkToTarget.active = true;
+    const tapState = React.useRef({ time: 0, x: 0, y: 0 });
+
+    const handlePointerDown = useCallback((e: ThreeEvent<PointerEvent>) => {
+        tapState.current = { time: Date.now(), x: e.clientX, y: e.clientY };
+    }, []);
+
+    const handlePointerUp = useCallback((e: ThreeEvent<PointerEvent>) => {
+        const { time, x, y } = tapState.current;
+        const timeDiff = Date.now() - time;
+        const distSq = Math.pow(e.clientX - x, 2) + Math.pow(e.clientY - y, 2);
+
+        // Tap threshold: < 250ms and < 20px movement (400 distSq) to segregate from camera drag
+        if (timeDiff < 250 && distSq < 400) {
+            e.stopPropagation();
+            const point = e.point as THREE.Vector3;
+            walkToTarget.x = Math.max(-23, Math.min(23, point.x));
+            walkToTarget.z = Math.max(-38, Math.min(38, point.z));
+            walkToTarget.active = true;
+        }
     }, []);
 
     return (
         <mesh
             rotation={[-Math.PI / 2, 0, 0]}
             position={[0, 0.01, 0]}
-            onDoubleClick={handleDoubleClick}
+            onDoubleClick={handlePointerUp} // Same trigger handles desktop fast clicks
+            onPointerDown={handlePointerDown}
+            onPointerUp={handlePointerUp}
             visible={false}
         >
             <planeGeometry args={[50, 80]} />
@@ -85,37 +98,14 @@ export function GalleryScene() {
                 <WalkableFloor />
                 
                 {/* Floor Shadows Optimized */}
-                <ContactShadows resolution={1024} scale={100} blur={2.5} opacity={0.5} far={10} position={[0, 0.02, 0]} />
+                <ContactShadows resolution={512} scale={100} blur={2.5} opacity={0.5} far={10} position={[0, 0.02, 0]} />
                 <BakeShadows />
 
-                {/* Artworks & Targeted Spotlights */}
+                {/* Artworks */}
                 {ARTWORKS.map((art, i) => (
                     <group key={`art-group-${i}`}>
                         <ArtworkFrame {...art} />
-                        {/* Overhead Spotlight (placed relative to wall) */}
-                        <BeamSpotlight
-                            position={[
-                                art.position[0] * 0.95, // slightly off-wall
-                                6.5,
-                                art.position[2]
-                            ]}
-                            target={art.position}
-                        />
                     </group>
-                ))}
-
-                {/* === CRAFTED LIGHTING PROPS === */}
-
-                {/* Center Row Hanging Orbs */}
-                {[-25, -10, 5, 20].map((z, idx) => (
-                    <HangingOrb key={`orb-c-${idx}`} position={[0, 4.5, z]} />
-                ))}
-
-                {/* Side Aisle Hanging Orbs */}
-                {[-15, 15].map((x, i) => (
-                    [-20, 10].map((z, j) => (
-                        <HangingOrb key={`orb-s-${i}-${j}`} position={[x, 5, z]} />
-                    ))
                 ))}
 
                 {/* === ENVIRONMENTAL PROPS === */}

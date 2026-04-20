@@ -41,7 +41,7 @@ export function Controls() {
         const up = (e: KeyboardEvent) => keys.current.delete(e.code);
         window.addEventListener("keydown", down);
         window.addEventListener("keyup", up);
-        camera.position.set(0, 1.7, 18);
+        camera.position.set(0, 1.6, 18);
         return () => {
             window.removeEventListener("keydown", down);
             window.removeEventListener("keyup", up);
@@ -75,8 +75,8 @@ export function Controls() {
                 euler.y -= deltaX * 0.005;
                 euler.x -= deltaY * 0.005;
 
-                // Pitch clamp: limit to ±40 degrees
-                const limit = 40 * Math.PI / 180;
+                // Pitch clamp: limit to ±30 degrees
+                const limit = 30 * Math.PI / 180;
                 euler.x = Math.max(-limit, Math.min(limit, euler.x));
 
                 camera.quaternion.setFromEuler(euler);
@@ -170,7 +170,7 @@ export function Controls() {
             if (distSq < 0.02) {
                 walkToTarget.active = false;
             }
-            camera.position.y = THREE.MathUtils.damp(camera.position.y, 1.7, 5, safeDelta);
+            camera.position.y = THREE.MathUtils.damp(camera.position.y, 1.6, 5, safeDelta);
             return; // skip manual movement while auto-walking
         }
 
@@ -207,10 +207,10 @@ export function Controls() {
         camera.position.x = Math.max(BOUNDARY.minX, Math.min(BOUNDARY.maxX, camera.position.x));
         camera.position.z = Math.max(BOUNDARY.minZ, Math.min(BOUNDARY.maxZ, camera.position.z));
         
-        // Soft Y height handling — damped floor alignment allows realism over strict 1.7 clamp
-        camera.position.y = THREE.MathUtils.damp(camera.position.y, 1.7, 5, safeDelta);
+        // Soft Y height handling — strict 1.6 eye-level
+        camera.position.y = THREE.MathUtils.damp(camera.position.y, 1.6, 5, safeDelta);
     });
 
-    // We use PointerLockControls, locking max/min polar angles to ±40 degrees from horizontal
-    return <PointerLockControls minPolarAngle={Math.PI / 2 - 40 * Math.PI / 180} maxPolarAngle={Math.PI / 2 + 40 * Math.PI / 180} />;
+    // We use PointerLockControls, locking max/min polar angles to ±30 degrees from horizontal
+    return <PointerLockControls minPolarAngle={Math.PI / 2 - 30 * Math.PI / 180} maxPolarAngle={Math.PI / 2 + 30 * Math.PI / 180} />;
 }

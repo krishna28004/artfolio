@@ -18,6 +18,21 @@ export default function ExhibitionPage() {
     const [entered, setEntered] = useState(false);
     const [showWalkHint, setShowWalkHint] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
+    const [showHUD, setShowHUD] = useState(false);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (localStorage.getItem("artfolio_onboarded")) {
+                setEntered(true);
+            }
+        }, 100);
+        return () => clearTimeout(timer);
+    }, []);
+
+    const completeOnboarding = () => {
+        localStorage.setItem("artfolio_onboarded", "true");
+        setEntered(true);
+    };
 
     // Sync fullscreen state if changed by external means (like Esc key)
     useEffect(() => {
@@ -129,6 +144,9 @@ export default function ExhibitionPage() {
                             <p className="font-sans text-muted text-[10px] tracking-[0.15em] uppercase mt-1 opacity-70">
                                 Walk freely · Explore the artworks
                             </p>
+                            <button onClick={() => setShowHUD(!showHUD)} className="pointer-events-auto mt-4 px-4 py-2 font-sans text-[10px] uppercase tracking-widest text-[#a0a0a0] border border-white/10 bg-black/60 rounded-md md:hidden hover:bg-white/10 active:scale-95 transition-all">
+                                {showHUD ? "Hide Controls" : "Show Controls"}
+                            </button>
                         </div>
                         <div className="flex gap-4 items-center pointer-events-auto">
                             {/* Fullscreen Toggle */}
@@ -174,55 +192,57 @@ export default function ExhibitionPage() {
                     </div>
 
                     {/* ========== ON-SCREEN NAVIGATION BUTTONS ========== */}
-                    <div className="absolute bottom-8 left-8 z-30 flex flex-col items-center gap-2">
-                        {/* Forward */}
-                        <button
-                            className="w-14 h-14 flex items-center justify-center bg-black/50 backdrop-blur-md border border-white/15 active:bg-white/20 transition-colors rounded-lg touch-none"
-                            onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); press("forward"); }}
-                            onPointerUp={(e) => { e.currentTarget.releasePointerCapture(e.pointerId); release("forward"); }}
-                            onPointerLeave={() => release("forward")}
-                            onPointerCancel={() => release("forward")}
-                            onContextMenu={(e) => e.preventDefault()}
-                        >
-                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 4L16 14H4L10 4Z" fill="rgba(255,255,255,0.7)" /></svg>
-                        </button>
-
-                        {/* Middle row: Left, Backward, Right */}
-                        <div className="flex gap-2">
+                    {showHUD && (
+                        <div className="absolute bottom-8 left-8 z-30 flex flex-col items-center gap-2 md:hidden animate-in fade-in slide-in-from-bottom-4">
+                            {/* Forward */}
                             <button
                                 className="w-14 h-14 flex items-center justify-center bg-black/50 backdrop-blur-md border border-white/15 active:bg-white/20 transition-colors rounded-lg touch-none"
-                                onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); press("left"); }}
-                                onPointerUp={(e) => { e.currentTarget.releasePointerCapture(e.pointerId); release("left"); }}
-                                onPointerLeave={() => release("left")}
-                                onPointerCancel={() => release("left")}
+                                onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); press("forward"); }}
+                                onPointerUp={(e) => { e.currentTarget.releasePointerCapture(e.pointerId); release("forward"); }}
+                                onPointerLeave={() => release("forward")}
+                                onPointerCancel={() => release("forward")}
                                 onContextMenu={(e) => e.preventDefault()}
                             >
-                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 10L14 4V16L4 10Z" fill="rgba(255,255,255,0.7)" /></svg>
+                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 4L16 14H4L10 4Z" fill="rgba(255,255,255,0.7)" /></svg>
                             </button>
 
-                            <button
-                                className="w-14 h-14 flex items-center justify-center bg-black/50 backdrop-blur-md border border-white/15 active:bg-white/20 transition-colors rounded-lg touch-none"
-                                onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); press("backward"); }}
-                                onPointerUp={(e) => { e.currentTarget.releasePointerCapture(e.pointerId); release("backward"); }}
-                                onPointerLeave={() => release("backward")}
-                                onPointerCancel={() => release("backward")}
-                                onContextMenu={(e) => e.preventDefault()}
-                            >
-                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 16L4 6H16L10 16Z" fill="rgba(255,255,255,0.7)" /></svg>
-                            </button>
+                            {/* Middle row: Left, Backward, Right */}
+                            <div className="flex gap-2">
+                                <button
+                                    className="w-14 h-14 flex items-center justify-center bg-black/50 backdrop-blur-md border border-white/15 active:bg-white/20 transition-colors rounded-lg touch-none"
+                                    onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); press("left"); }}
+                                    onPointerUp={(e) => { e.currentTarget.releasePointerCapture(e.pointerId); release("left"); }}
+                                    onPointerLeave={() => release("left")}
+                                    onPointerCancel={() => release("left")}
+                                    onContextMenu={(e) => e.preventDefault()}
+                                >
+                                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 10L14 4V16L4 10Z" fill="rgba(255,255,255,0.7)" /></svg>
+                                </button>
 
-                            <button
-                                className="w-14 h-14 flex items-center justify-center bg-black/50 backdrop-blur-md border border-white/15 active:bg-white/20 transition-colors rounded-lg touch-none"
-                                onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); press("right"); }}
-                                onPointerUp={(e) => { e.currentTarget.releasePointerCapture(e.pointerId); release("right"); }}
-                                onPointerLeave={() => release("right")}
-                                onPointerCancel={() => release("right")}
-                                onContextMenu={(e) => e.preventDefault()}
-                            >
-                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M16 10L6 16V4L16 10Z" fill="rgba(255,255,255,0.7)" /></svg>
-                            </button>
+                                <button
+                                    className="w-14 h-14 flex items-center justify-center bg-black/50 backdrop-blur-md border border-white/15 active:bg-white/20 transition-colors rounded-lg touch-none"
+                                    onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); press("backward"); }}
+                                    onPointerUp={(e) => { e.currentTarget.releasePointerCapture(e.pointerId); release("backward"); }}
+                                    onPointerLeave={() => release("backward")}
+                                    onPointerCancel={() => release("backward")}
+                                    onContextMenu={(e) => e.preventDefault()}
+                                >
+                                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 16L4 6H16L10 16Z" fill="rgba(255,255,255,0.7)" /></svg>
+                                </button>
+
+                                <button
+                                    className="w-14 h-14 flex items-center justify-center bg-black/50 backdrop-blur-md border border-white/15 active:bg-white/20 transition-colors rounded-lg touch-none"
+                                    onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); press("right"); }}
+                                    onPointerUp={(e) => { e.currentTarget.releasePointerCapture(e.pointerId); release("right"); }}
+                                    onPointerLeave={() => release("right")}
+                                    onPointerCancel={() => release("right")}
+                                    onContextMenu={(e) => e.preventDefault()}
+                                >
+                                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M16 10L6 16V4L16 10Z" fill="rgba(255,255,255,0.7)" /></svg>
+                                </button>
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     {/* WASD Hint (Desktop) */}
                     <div className="absolute bottom-8 right-8 z-30 hidden md:flex flex-col items-center gap-1 opacity-40 pointer-events-none">
@@ -235,32 +255,37 @@ export default function ExhibitionPage() {
             {/* ========== ENTRY OVERLAY ========== */}
             {!entered && (
                 <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/90 backdrop-blur-md">
-                    <h1 className="font-serif text-5xl md:text-6xl text-white tracking-tight mb-4">
-                        Enter the Exhibition
+                    <h1 className="font-serif text-3xl md:text-5xl text-white tracking-tight mb-8">
+                        Exhibition Controls
                     </h1>
-                    <p className="font-sans text-[#a0a0a0] text-[15px] tracking-wider mb-14 max-w-md text-center leading-relaxed">
-                        Walk freely through a curated virtual hall featuring Krishna Kumar&apos;s handmade pencil sketches.
-                    </p>
-                    <button
-                        onClick={() => setEntered(true)}
-                        className="px-14 py-4 bg-primary text-[#1a0f00] font-sans uppercase tracking-[0.15em] text-[12px] font-bold hover:brightness-110 transition-all shadow-[0_0_40px_rgba(242,202,80,0.15)]"
-                    >
-                        Enter Gallery
-                    </button>
+                    
+                    <div className="flex flex-col gap-6 text-center max-w-sm mb-12 bg-white/5 border border-white/10 p-8 rounded-xl shadow-2xl">
+                        <div>
+                            <div className="font-sans text-[10px] text-muted tracking-widest uppercase mb-2">Desktop Pointer</div>
+                            <div className="font-mono text-white text-[13px]">Press ESC to release mouse pointer</div>
+                        </div>
+                        <div className="w-12 h-[1px] bg-white/10 mx-auto"></div>
+                        <div>
+                            <div className="font-sans text-[10px] text-muted tracking-widest uppercase mb-2">Navigation</div>
+                            <div className="font-mono text-white text-[13px] leading-relaxed">
+                                To walk: point the center dot to the floor near artwork and double click (or tap).
+                            </div>
+                        </div>
+                    </div>
 
-                    <div className="absolute bottom-10 flex gap-8 text-center">
-                        <div>
-                            <div className="font-sans text-[10px] text-muted/50 tracking-widest uppercase mb-1">Move</div>
-                            <div className="font-mono text-white text-sm">W A S D</div>
-                        </div>
-                        <div>
-                            <div className="font-sans text-[10px] text-muted/50 tracking-widest uppercase mb-1">Look</div>
-                            <div className="font-mono text-white text-sm">Mouse</div>
-                        </div>
-                        <div>
-                            <div className="font-sans text-[10px] text-muted/50 tracking-widest uppercase mb-1">Mobile</div>
-                            <div className="font-mono text-white text-sm">Buttons</div>
-                        </div>
+                    <div className="flex flex-col md:flex-row gap-4 mb-[env(safe-area-inset-bottom)]">
+                        <button
+                            onClick={completeOnboarding}
+                            className="px-8 py-3 bg-primary text-[#1a0f00] font-sans uppercase tracking-[0.15em] text-[11px] font-bold hover:brightness-110 active:scale-95 transition-all shadow-[0_0_20px_rgba(242,202,80,0.15)]"
+                        >
+                            Enter Exhibition
+                        </button>
+                        <button
+                            onClick={() => setEntered(true)}
+                            className="px-8 py-3 bg-transparent text-white/50 font-sans uppercase tracking-[0.15em] text-[11px] hover:text-white border border-white/10 active:scale-95 hover:bg-white/5 transition-all"
+                        >
+                            Ignore Instructions
+                        </button>
                     </div>
                 </div>
             )}

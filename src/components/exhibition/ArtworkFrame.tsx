@@ -21,14 +21,13 @@ export function ArtworkFrame({
 }: Omit<ArtworkFrameProps, "id">) {
     const { gl } = useThree();
     const texture = useTexture(url);
-    // eslint-disable-next-line react-hooks/immutability
-    texture.colorSpace = THREE.SRGBColorSpace;
-    // eslint-disable-next-line react-hooks/immutability
-    texture.minFilter = THREE.LinearMipmapLinearFilter;
-
-    // Apply HD texture filtering and GC on unmount
+    // Apply HD texture filtering and memory management safely once
     useEffect(() => {
-        texture.anisotropy = gl.capabilities.getMaxAnisotropy();
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.minFilter = THREE.LinearMipmapLinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+        texture.anisotropy = Math.min(gl.capabilities.getMaxAnisotropy(), 16); // Cap to 16 for stability
+        texture.generateMipmaps = true;
         texture.needsUpdate = true;
         
         return () => {
