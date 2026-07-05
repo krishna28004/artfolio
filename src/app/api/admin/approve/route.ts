@@ -29,17 +29,21 @@ export async function POST(req: Request) {
     expiresAt.setHours(expiresAt.getHours() + 24);
 
     // 1. Admin Operation: Update DB Status, set locked Price, and inject Expiration Threshold
-    const { error: dbError } = await supabase
+    const { error: dbError, data: updatedData } = await supabase
       .from("commissions")
       .update({
         status: 'approved',
         price: price,
         expires_at: expiresAt.toISOString()
       })
-      .eq('id', commissionId);
+      .eq('id', commissionId)
+      .eq('status', 'pending')
+      .select()
+      .single();
 
-    if (dbError) {
-      console.error("[DB_WARN] Mock update processing locally (missing keys).");
+    if (dbError || !updatedData) {
+      console.error("[ADMIN_DB_ERROR] Failed to update commission status:", dbError);
+      return NextResponse.json({ success: false, message: "Failed to update commission record. Ensure it is in pending state." }, { status: 500 });
     }
 
     // 2. Fire Async Email to User with specialized Payment Checkout Link
@@ -50,9 +54,6 @@ export async function POST(req: Request) {
         subject: "Commission Approved - Secure your piece",
         text: `Your commission has been approved. The bespoke quote is $${price}. Please complete your acquisition securely here: https://yourdomain.com/checkout/${commissionId}`
       });
-      console.log(`[APPROVAL_NOTIFY] Invoice dispatched to user: ${commissionId}`);
-    } else {
-      console.log(`[APPROVAL_MOCK] Approval processed for ${commissionId} at price $${price}`);
     }
 
     return NextResponse.json({ success: true, message: "Commission Approved and Invoice Sent." });

@@ -48,8 +48,6 @@ export default function CheckoutPage() {
     const fetchPrice = async () => {
       if (!commissionId) return;
       
-      console.log(`[CHECKOUT_INIT] Fetching price for allocation: ${commissionId}`);
-      
       const { data, error } = await supabase
         .from('commissions')
         .select('price')
@@ -63,10 +61,8 @@ export default function CheckoutPage() {
       }
 
       if (data && typeof data.price === 'number') {
-        console.log(`[CHECKOUT_SUCCESS] Price loaded: ₹${data.price / 100}`);
         setPrice(data.price);
       } else {
-        console.warn("[CHECKOUT_STATE_WARN] Commission found but price is unassigned.");
         setFailReason("The curator has not assigned a capital allocation value to this request yet.");
       }
     };
@@ -126,7 +122,7 @@ export default function CheckoutPage() {
           if (verifyData.success) {
             setIsSuccess(true);
           } else {
-            setFailReason("Payment signature algorithmic tampering detected.");
+            setFailReason(verifyData.message || "Payment verification failed.");
           }
         },
       };
@@ -142,7 +138,6 @@ export default function CheckoutPage() {
 
       razorpay.on('payment.failed', function (res: unknown) {
         const response = res as RazorpayErrorResponse;
-        console.error("Razorpay Failure Event:", response.error.description);
         setFailReason(`Transaction Declined: ${response.error.description}. Please retry with an alternate card.`);
         setIsProcessing(false); // Unblock the UI for retry
       });

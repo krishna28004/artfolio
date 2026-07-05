@@ -13,12 +13,18 @@ export async function POST(req: Request) {
       .eq("id", commissionId)
       .single();
 
-    if (dbError) {
-      console.warn("[DB_WARN] Missing DB keys. Defaulting to local mock price array.");
+    if (dbError || !commission || typeof commission.price !== 'number' || commission.price <= 0) {
+      console.error("[ORDER_FATAL] Invalid or missing commission lookup:", dbError);
+      return NextResponse.json({ success: false, message: "Invalid commission request." }, { status: 400 });
+    }
+
+    if (commission.status === "paid" || commission.status === "fulfilled") {
+      console.warn(`[ORDER_FATAL] Attempt to recreate order for terminal commission: ${commissionId}`);
+      return NextResponse.json({ success: false, message: "This commission has already been paid or fulfilled." }, { status: 400 });
     }
 
     // 1B. Expiration Deadline Enforcement Algorithm
-    if (commission?.expires_at) {
+    if (commission.expires_at) {
       if (new Date() > new Date(commission.expires_at)) {
         console.warn(`[ORDER_EXPIRED] Order generation blocked for dead commission allocation: ${commissionId}`);
 
@@ -29,8 +35,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // Mock payload to ensure UI doesn't crash during local unconfigured testing
-    const price = commission?.price || 500000; // E.g., 500,000 paise/cents = 5000 USD/INR
+    const price = commission.price;
 
     // 2. Generate secure authenticated order via Razorpay Server
     const order = await razorpay.orders.create({
@@ -38,8 +43,6 @@ export async function POST(req: Request) {
       currency: "INR",
       receipt: `cart_${commissionId}`,
     });
-
-    console.log(`[RAZORPAY_TX_INIT] Order generated: ${order.id} for amount: ${price}`);
 
     return NextResponse.json({ success: true, orderId: order.id, amount: price });
   } catch (error) {

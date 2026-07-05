@@ -46,9 +46,6 @@ export async function deleteImageFromCloudinary(publicId: string) {
   const apiKey = process.env.CLOUDINARY_API_KEY;
 
   if (!cloudName || !apiSecret || !apiKey) {
-    console.log(
-      `[CLOUDINARY_CLEANUP_MOCK] Orphaned upload securely purged from CDN (mock due to missing keys): ${publicId}`
-    );
     return;
   }
 

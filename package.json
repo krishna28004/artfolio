@@ -1,6 +1,21 @@
 {
-  "name": "client",
+  "name": "artfolio",
   "version": "0.1.0",
+  "description": "A premium interactive artist portfolio built with Next.js and Three.js.",
+  "author": "krishna28004",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/krishna28004/artfolio.git"
+  },
+  "keywords": [
+    "nextjs",
+    "threejs",
+    "react-three-fiber",
+    "ecommerce",
+    "portfolio",
+    "virtual-gallery"
+  ],
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -31,13 +46,13 @@
   },
   "devDependencies": {
     "@types/node": "^20",
-    "@types/react": "^19",
+    "@types/react": "19.2.17",
     "@types/react-dom": "^19",
     "autoprefixer": "^10.4.19",
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.3",
-    "typescript": "^5"
+    "typescript": "5.9.3"
   }
 }

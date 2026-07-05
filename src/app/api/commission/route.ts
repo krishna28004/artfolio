@@ -44,21 +44,14 @@ export async function POST(req: Request) {
     if (dbError) {
       // Postgres Unique Violation (IDEMPOTENCY CATCH) — safe to treat as success
       if (dbError.code === '23505') {
-        console.log(`[IDEMPOTENCY_INTERCEPT] Prevented duplicate payload for key: ${validData.idempotencyKey}`);
         return NextResponse.json({ success: true, message: "Request secured safely." });
       }
 
-      // Log full error details to Vercel logs for diagnosis
-      console.error("[DB_FATAL] Supabase insert failed.", {
-        code: dbError.code,
-        message: dbError.message,
-        details: dbError.details,
-        hint: dbError.hint,
-      });
+      // Log critical error without leaking PII payload
+      console.error("[DB_FATAL] Supabase insert failed.");
 
       // ORPHAN CLOUDINARY DESTRUCTION CATCH — clean up uploaded image if DB save failed
       if (validData.publicId) {
-        console.log(`[DB_FATAL] Initiating CDN cleanup for public_id: ${validData.publicId}`);
         await deleteImageFromCloudinary(validData.publicId);
       }
 
@@ -78,9 +71,6 @@ export async function POST(req: Request) {
           subject: `New Commission Request - ${validData.name}`,
           text: `A new commission has been requested by ${validData.name} (${validData.email}).\nBudget: ${validData.budget}\nMessage: ${validData.message}`
         });
-        console.log(`[EMAIL_SUCCESS] Admin notified for inquiry: ${validData.idempotencyKey}`);
-      } else {
-        console.log(`[EMAIL_WARN] No Resend key found. DB insert succeeded but email bypassed.`);
       }
     } catch (emailErr) {
       console.error("[EMAIL_FATAL] Resend bypassed to save DB state:", emailErr);

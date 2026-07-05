@@ -35,8 +35,6 @@ export async function POST(req: Request) {
       const paymentId = paymentEntity.id;
       const amount = paymentEntity.amount;
 
-      console.log(`[TX_CAPTURED] Webhook Authorized - Order: ${orderId} | Payment: ${paymentId} | Amount: ${amount}`);
-
       // 3. Idempotent DB Write (Race Safe)
       const { data: commission } = await supabase
         .from("commissions")
@@ -45,7 +43,6 @@ export async function POST(req: Request) {
         .single();
 
       if (commission?.status === "paid") {
-        console.log(`[IDEMPOTENCY_TRIP] Duplicate webhook skip for Order: ${orderId}`);
         return NextResponse.json({ success: true, message: "Already processed" });
       }
 

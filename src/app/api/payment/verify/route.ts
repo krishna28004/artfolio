@@ -25,23 +25,27 @@ export async function POST(req: Request) {
         .single();
 
       if (tracking?.status === "paid" || tracking?.status === "fulfilled") {
-        console.log(`[IDEMPOTENCY_TRIP] Duplicate verify call safely aborted for ${commissionId}`);
         return NextResponse.json({ success: true, message: "Payment previously recorded." });
       }
 
       // 4. Update internal DB state safely.
-      const { error: dbError } = await supabase
+      const { error: dbError, data: updatedData } = await supabase
         .from("commissions")
         .update({
           status: 'paid',
           razorpay_order_id,
           razorpay_payment_id
         })
-        .eq("id", commissionId);
+        .eq("id", commissionId)
+        .eq("status", "approved")
+        .select()
+        .single();
 
-      if (dbError) console.warn("[DB_WARN] Update triggered locally.");
+      if (dbError || !updatedData) {
+        console.error(`[VERIFY_FATAL] Failed to record payment state. Commission ID: ${commissionId}, Order ID: ${razorpay_order_id}, Payment ID: ${razorpay_payment_id}`, dbError);
+        return NextResponse.json({ success: false, message: "Payment captured but database update failed." }, { status: 500 });
+      }
 
-      console.log(`[VERIFY_SUCCESS] Payment signature authenticated successfully. Status modified to PAID.`);
       return NextResponse.json({ success: true, message: "Payment verified mathematically." });
     } else {
       console.error("[VERIFY_WARN] Mathematical signature mismatch. Potential front-end tampering intercepted.");
