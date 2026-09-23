@@ -40,22 +40,41 @@ export async function POST(req: Request) {
       );
     }
 
-    // 2. Token-Gated Clearance Check (Bearer credential)
-    if (commission.checkout_token_hash) {
-      if (!token) {
-        return NextResponse.json(
-          { success: false, message: "Private security clearance token required." },
-          { status: 403 }
-        );
-      }
+    // 2. Token-Gated Clearance Check (Bearer credential or HttpOnly Session Cookie)
+    if (!commission.checkout_token_hash) {
+      return NextResponse.json(
+        { success: false, message: "No active checkout authorization found for this commission." },
+        { status: 403 }
+      );
+    }
 
+    const sessionCookieName = `checkout_session_${commissionId}`;
+    const cookieHeader = req.headers.get("cookie") || "";
+    let sessionCookieVal = "";
+    const match = cookieHeader.match(new RegExp(`(?:^|; )${sessionCookieName}=([^;]*)`));
+    if (match) {
+      sessionCookieVal = decodeURIComponent(match[1]);
+    }
+
+    let isAuthorized = false;
+    if (token) {
       const inputHash = crypto.createHash("sha256").update(token).digest("hex");
-      if (!timingSafeEqualStr(inputHash, commission.checkout_token_hash)) {
-        return NextResponse.json(
-          { success: false, message: "Invalid acquisition access token." },
-          { status: 403 }
-        );
+      if (timingSafeEqualStr(inputHash, commission.checkout_token_hash)) {
+        isAuthorized = true;
       }
+    }
+
+    if (!isAuthorized && sessionCookieVal) {
+      if (timingSafeEqualStr(sessionCookieVal, commission.checkout_token_hash)) {
+        isAuthorized = true;
+      }
+    }
+
+    if (!isAuthorized) {
+      return NextResponse.json(
+        { success: false, message: "Private security clearance token required or invalid." },
+        { status: 403 }
+      );
     }
 
     // 3. State Machine Checks
@@ -119,17 +138,18 @@ export async function POST(req: Request) {
       },
     });
 
-    // 7. Insert Audit/Payment record in 'payments' table
-    try {
-      await supabaseAdmin.from("payments").insert({
-        commission_id: commissionId,
-        razorpay_order_id: order.id,
-        amount: pricePaise,
-        currency: "INR",
-        status: "created",
-      });
-    } catch (payErr) {
-      console.warn("[PAYMENT_AUDIT_INSERT_WARN] Failed to insert initial payment record:", payErr);
+    // 7. Insert Audit/Payment record in 'payments' table (payment_id is null until captured)
+    const { error: paymentInsertError } = await supabaseAdmin.from("payments").insert({
+      commission_id: commissionId,
+      razorpay_order_id: order.id,
+      razorpay_payment_id: null,
+      amount: pricePaise,
+      currency: "INR",
+      status: "created",
+    });
+
+    if (paymentInsertError) {
+      console.error("[PAYMENT_AUDIT_INSERT_ERROR] Failed to record initial payment order:", paymentInsertError);
     }
 
     // 8. Record Razorpay Order ID & transition to payment_pending

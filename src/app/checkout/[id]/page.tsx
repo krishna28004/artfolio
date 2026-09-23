@@ -52,6 +52,14 @@ function CheckoutContent() {
   const [isGatewayReady, setIsGatewayReady] = useState(false);
   const [isValidating, setIsValidating] = useState(true);
 
+  // Scrub bearer token from visible URL immediately to prevent browser history & referer leakage
+  useEffect(() => {
+    if (token && typeof window !== "undefined") {
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+    }
+  }, [token]);
+
   // Authoritative server-side token and status validation
   useEffect(() => {
     let isMounted = true;
@@ -73,6 +81,9 @@ function CheckoutContent() {
             setFailReason("This exclusive 24-hour acquisition window has permanently expired.");
           } else if (res.status === 403) {
             setFailReason("Private clearance required. The security token in this link is invalid or missing.");
+          } else if (res.status === 409) {
+            setIsSuccess(true);
+            return;
           } else {
             setFailReason(data.message || "This acquisition link could not be validated.");
           }

@@ -1,6 +1,6 @@
 import { getSupabase } from "@/shared/services/supabase";
 import { artworks as staticArtworks, Artwork } from "@/features/artwork/data/artworks";
-import { Database } from "@/types/supabase";
+import type { Database } from "@/types/supabase";
 
 type DbArtwork = Database["public"]["Tables"]["artworks"]["Row"];
 

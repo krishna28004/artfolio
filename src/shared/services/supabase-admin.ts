@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { Database } from "@/types/supabase";
+import type { Database } from "@/types/supabase";
 
 let adminInstance: SupabaseClient<Database> | null = null;
 
@@ -36,6 +36,14 @@ export function getSupabaseAdmin(): SupabaseClient<Database> {
   });
 
   return adminInstance;
+}
+
+/**
+ * Testing helper allowing integration tests to inject a mock Supabase admin instance.
+ * @internal
+ */
+export function _setAdminInstanceForTesting(mock: SupabaseClient<Database> | null) {
+  adminInstance = mock;
 }
 
 /**

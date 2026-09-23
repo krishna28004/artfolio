@@ -2,18 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/shared/services/supabase-admin";
 import { verifyAdminAuth } from "@/features/admin/utils/auth";
 
-import { CommissionStatus } from "@/types/supabase";
+import type { CommissionStatus } from "@/types/supabase";
 
 export async function GET(req: NextRequest) {
   try {
     const authResult = await verifyAdminAuth(req);
     if (!authResult.authorized) {
-      const legacyKey = process.env.ADMIN_API_KEY;
-      const authHeader = req.headers.get("authorization") || "";
-      const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-      if (!legacyKey || bearerToken !== legacyKey) {
-        return NextResponse.json({ success: false, message: "Unauthorized." }, { status: 401 });
-      }
+      return NextResponse.json(
+        { success: false, message: authResult.error || "Unauthorized administrative clearance." },
+        { status: 401 }
+      );
     }
 
     const { searchParams } = new URL(req.url);

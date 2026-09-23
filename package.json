@@ -22,7 +22,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --experimental-strip-types --test tests/money.test.ts tests/crypto.test.ts tests/commission-schema.test.ts tests/payment-logic.test.ts tests/production-readiness.test.ts"
+    "test": "node --import ./tests/register-loader.mjs --experimental-strip-types --test tests/money.test.ts tests/crypto.test.ts tests/commission-schema.test.ts tests/payment-logic.test.ts tests/production-readiness.test.ts tests/security-hardening.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

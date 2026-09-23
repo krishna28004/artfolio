@@ -9,7 +9,7 @@ import { getSupabaseAdmin } from "@/shared/services/supabase-admin";
 function hashClientIp(req: NextRequest): string {
   const forwarded = req.headers.get("x-forwarded-for");
   const rawIp = forwarded ? forwarded.split(",")[0].trim() : req.headers.get("x-real-ip") || "127.0.0.1";
-  const salt = process.env.VIEW_TELEMETRY_SALT || process.env.SUPABASE_SERVICE_ROLE_KEY || "artfolio-telemetry-salt";
+  const salt = process.env.TELEMETRY_SALT || process.env.VIEW_TELEMETRY_SALT || process.env.SUPABASE_SERVICE_ROLE_KEY || "artfolio-telemetry-salt";
   return crypto.createHash("sha256").update(`${rawIp}:${salt}`).digest("hex");
 }
 

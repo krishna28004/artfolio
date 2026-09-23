@@ -100,13 +100,14 @@ export async function POST(req: Request) {
         );
       }
 
-      // 8. Atomic State Transition to 'paid'
+      // 8. Atomic State Transition to 'paid' & Revoke Checkout Token
       const nowIso = new Date().toISOString();
       const { error: updateError } = await supabaseAdmin
         .from("commissions")
         .update({
           status: "paid",
           razorpay_payment_id: paymentId,
+          checkout_token_hash: null, // Revoke checkout token post-payment
           paid_at: nowIso,
           updated_at: nowIso,
         })
@@ -118,18 +119,38 @@ export async function POST(req: Request) {
         return NextResponse.json({ success: false, message: "Database update failure." }, { status: 500 });
       }
 
-      // 9. Record in payments table
+      // 9. Record/Update in payments table (Idempotent)
       try {
-        await supabaseAdmin.from("payments").insert({
-          commission_id: commission.id,
-          razorpay_order_id: orderId,
-          razorpay_payment_id: paymentId,
-          amount: capturedAmount,
-          currency: "INR",
-          status: "captured",
-          method,
-          event_id: eventId,
-        });
+        const { data: existingPay } = await supabaseAdmin
+          .from("payments")
+          .select("id")
+          .eq("razorpay_order_id", orderId)
+          .maybeSingle();
+
+        if (existingPay) {
+          await supabaseAdmin
+            .from("payments")
+            .update({
+              razorpay_payment_id: paymentId,
+              amount: capturedAmount,
+              currency: "INR",
+              status: "captured",
+              method,
+              event_id: eventId,
+            })
+            .eq("id", existingPay.id);
+        } else {
+          await supabaseAdmin.from("payments").insert({
+            commission_id: commission.id,
+            razorpay_order_id: orderId,
+            razorpay_payment_id: paymentId,
+            amount: capturedAmount,
+            currency: "INR",
+            status: "captured",
+            method,
+            event_id: eventId,
+          });
+        }
       } catch (payErr) {
         console.warn("[WEBHOOK_PAYMENT_INSERT_WARN]", payErr);
       }
@@ -187,7 +208,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, message: "Failure event received and logged." });
     }
 
-    // 12. Refund Event Stream
+    // 12. Refund Event Stream (Idempotent update on existing payment record)
     if (event.event === "refund.created" || event.event === "payment.refunded") {
       const refundEntity = event.payload?.refund?.entity || event.payload?.payment?.entity;
       const paymentId = refundEntity?.payment_id || refundEntity?.id;
@@ -197,29 +218,31 @@ export async function POST(req: Request) {
         try {
           const { data: existingPay } = await supabaseAdmin
             .from("payments")
-            .select("commission_id, razorpay_order_id")
+            .select("id, commission_id, razorpay_order_id, status")
             .eq("razorpay_payment_id", paymentId)
             .limit(1)
             .maybeSingle();
 
           if (existingPay) {
-            await supabaseAdmin.from("payments").insert({
-              commission_id: existingPay.commission_id,
-              razorpay_order_id: existingPay.razorpay_order_id,
-              razorpay_payment_id: paymentId,
-              amount: refundAmount || 0,
-              currency: "INR",
-              status: "refunded",
-              event_id: eventId,
-            });
+            // Idempotent: If already recorded as refunded, skip duplicate write
+            if (existingPay.status !== "refunded") {
+              await supabaseAdmin
+                .from("payments")
+                .update({
+                  status: "refunded",
+                  event_id: eventId,
+                  error_description: `Refund processed: ${refundAmount ? refundAmount / 100 + " INR" : "Full/Partial"}`,
+                })
+                .eq("id", existingPay.id);
 
-            await supabaseAdmin.from("audit_logs").insert({
-              actor: "razorpay_webhook",
-              action: "refund_recorded",
-              target_type: "commission",
-              target_id: existingPay.commission_id,
-              metadata: { paymentId, refundAmount, eventId },
-            });
+              await supabaseAdmin.from("audit_logs").insert({
+                actor: "razorpay_webhook",
+                action: "refund_recorded",
+                target_type: "commission",
+                target_id: existingPay.commission_id,
+                metadata: { paymentId, refundAmount, eventId },
+              });
+            }
           }
         } catch (refundErr) {
           console.warn("[REFUND_LOG_WARN]", refundErr);

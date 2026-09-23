@@ -32,18 +32,10 @@ export async function POST(req: NextRequest) {
     // 1. Strict Admin Authorization Check
     const authResult = await verifyAdminAuth(req);
     if (!authResult.authorized) {
-      // Fallback check: legacy ADMIN_API_KEY Bearer header for backward compatibility
-      const legacyKey = process.env.ADMIN_API_KEY;
-      const authHeader = req.headers.get("authorization") || "";
-      const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-      const matchesLegacy = legacyKey && bearerToken && bearerToken === legacyKey;
-
-      if (!matchesLegacy) {
-        return NextResponse.json(
-          { success: false, message: authResult.error || "Unauthorized administrative clearance." },
-          { status: 401 }
-        );
-      }
+      return NextResponse.json(
+        { success: false, message: authResult.error || "Unauthorized administrative clearance." },
+        { status: 401 }
+      );
     }
 
     const actor = authResult.userEmail || "admin";

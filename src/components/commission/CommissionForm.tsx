@@ -278,6 +278,15 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
           </div>
         ) : (
           <div
+            role="button"
+            tabIndex={0}
+            aria-label="Upload reference material. Drag and drop an image or press Enter to browse files."
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                fileInputRef.current?.click();
+              }
+            }}
             onDragOver={(e) => {
               e.preventDefault();
               setIsDragOver(true);
@@ -285,7 +294,7 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
             onDragLeave={() => setIsDragOver(false)}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
-            className={`border border-dashed p-6 text-center cursor-pointer transition-all duration-300 flex flex-col items-center justify-center gap-2 group ${
+            className={`border border-dashed p-6 text-center cursor-pointer transition-all duration-300 flex flex-col items-center justify-center gap-2 group focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/60 ${
               isDragOver
                 ? "border-primary bg-primary/[0.04]"
                 : "border-white/15 hover:border-primary/50 bg-white/[0.01] hover:bg-white/[0.03]"
@@ -309,18 +318,22 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
         <label className="text-[11px] uppercase tracking-[0.2em] text-muted font-sans">
           Desired Scale <span className="text-primary">*</span>
         </label>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div role="radiogroup" aria-label="Desired Scale" className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {SCALE_OPTIONS.map((opt) => {
             const isSelected = selectedScale === opt.label;
             return (
               <button
                 key={opt.id}
                 type="button"
+                role="radio"
+                aria-checked={isSelected}
+                tabIndex={isSelected ? 0 : -1}
+                aria-label={`${opt.label}, ${opt.subtitle}`}
                 onClick={() => {
                   setSelectedScale(opt.label);
                   setValue("size", opt.label, { shouldValidate: true });
                 }}
-                className={`relative text-left p-3.5 sm:p-4 border transition-all duration-200 flex flex-col justify-between h-20 sm:h-22 ${
+                className={`relative text-left p-3.5 sm:p-4 border transition-all duration-200 flex flex-col justify-between h-20 sm:h-22 focus:outline-none focus:ring-1 focus:ring-primary ${
                   isSelected
                     ? "border-primary bg-primary/[0.06] text-text"
                     : "border-white/12 bg-white/[0.015] hover:border-white/30 text-text/80"
@@ -349,18 +362,22 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
         <label className="text-[11px] uppercase tracking-[0.2em] text-muted font-sans">
           Budget Range <span className="text-primary">*</span>
         </label>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div role="radiogroup" aria-label="Budget Range" className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {BUDGET_OPTIONS.map((opt) => {
             const isSelected = selectedBudget === opt.label;
             return (
               <button
                 key={opt.id}
                 type="button"
+                role="radio"
+                aria-checked={isSelected}
+                tabIndex={isSelected ? 0 : -1}
+                aria-label={`${opt.label}, ${opt.subtitle}`}
                 onClick={() => {
                   setSelectedBudget(opt.label);
                   setValue("budget", opt.label, { shouldValidate: true });
                 }}
-                className={`relative text-left p-3.5 sm:p-4 border transition-all duration-200 flex flex-col justify-between h-20 sm:h-22 ${
+                className={`relative text-left p-3.5 sm:p-4 border transition-all duration-200 flex flex-col justify-between h-20 sm:h-22 focus:outline-none focus:ring-1 focus:ring-primary ${
                   isSelected
                     ? "border-primary bg-primary/[0.06] text-text"
                     : "border-white/12 bg-white/[0.015] hover:border-white/30 text-text/80"

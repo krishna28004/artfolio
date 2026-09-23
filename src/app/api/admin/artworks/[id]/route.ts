@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/shared/services/supabase-admin";
 import { verifyAdminAuth } from "@/features/admin/utils/auth";
 import { rupeesToPaise } from "@/shared/utils/money";
-import { Database, Json } from "@/types/supabase";
+import type { Database, Json } from "@/types/supabase";
 
 export async function GET(
   req: NextRequest,

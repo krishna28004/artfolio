@@ -107,7 +107,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // 8. Atomic DB State Transition to 'paid'
+    // 8. Atomic DB State Transition to 'paid' & Revoke Checkout Token
     const nowIso = new Date().toISOString();
     const { error: updateError, data: updatedRecord } = await supabaseAdmin
       .from("commissions")
@@ -115,6 +115,7 @@ export async function POST(req: Request) {
         status: "paid",
         razorpay_order_id,
         razorpay_payment_id,
+        checkout_token_hash: null, // Revoke checkout token post-payment
         paid_at: nowIso,
         updated_at: nowIso,
       })
@@ -124,6 +125,21 @@ export async function POST(req: Request) {
       .single();
 
     if (updateError || !updatedRecord) {
+      // Concurrency check: If a concurrent webhook already marked this commission as paid, succeed idempotently
+      const { data: latestCommission } = await supabaseAdmin
+        .from("commissions")
+        .select("id, status")
+        .eq("id", commissionId)
+        .single();
+
+      if (latestCommission && (latestCommission.status === "paid" || latestCommission.status === "fulfilled")) {
+        console.info(`[VERIFY_RACE_RESOLVED] Commission ${commissionId} already marked as paid by concurrent webhook.`);
+        return NextResponse.json({
+          success: true,
+          message: "Payment successfully verified and recorded.",
+        });
+      }
+
       console.error("[VERIFY_UPDATE_ERROR] Failed to atomically update commission status to paid:", updateError);
       return NextResponse.json(
         { success: false, message: "Payment verified but database update failed." },
@@ -131,16 +147,33 @@ export async function POST(req: Request) {
       );
     }
 
-    // 9. Update/Insert in 'payments' Table
+    // 9. Update/Insert in 'payments' Table (Idempotent)
     try {
-      await supabaseAdmin.from("payments").insert({
-        commission_id: commissionId,
-        razorpay_order_id,
-        razorpay_payment_id,
-        amount: commission.price || 0,
-        currency: "INR",
-        status: "captured",
-      });
+      const { data: existingPay } = await supabaseAdmin
+        .from("payments")
+        .select("id")
+        .eq("razorpay_order_id", razorpay_order_id)
+        .maybeSingle();
+
+      if (existingPay) {
+        await supabaseAdmin
+          .from("payments")
+          .update({
+            razorpay_payment_id,
+            status: "captured",
+            amount: commission.price || 0,
+          })
+          .eq("id", existingPay.id);
+      } else {
+        await supabaseAdmin.from("payments").insert({
+          commission_id: commissionId,
+          razorpay_order_id,
+          razorpay_payment_id,
+          amount: commission.price || 0,
+          currency: "INR",
+          status: "captured",
+        });
+      }
     } catch (payInsertErr) {
       console.warn("[PAYMENT_TABLE_INSERT_WARN]", payInsertErr);
     }

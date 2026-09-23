@@ -1,44 +1,22 @@
 import { NextResponse } from "next/server";
 import { commissionSchema } from "@/features/commission/schema/commission-schema";
 import { supabaseAdmin } from "@/shared/services/supabase-admin";
-import { deleteImageFromCloudinary } from "@/shared/services/cloudinary";
+import { deleteImageFromCloudinary } from "@/shared/services/cloudinary-server";
 import { Resend } from "resend";
-import { Ratelimit } from "@upstash/ratelimit";
-import { Redis } from "@upstash/redis";
-
-import { checkRateLimit, getClientIp } from "@/shared/utils/rate-limit";
+import { checkDistributedRateLimit, getClientIp } from "@/shared/utils/rate-limit";
 
 export async function POST(req: Request) {
   try {
     const clientIp = getClientIp(req);
 
-    // 1. IP Rate Limiting (In-Memory Token Bucket + Upstash if configured)
-    const localRateCheck = checkRateLimit(`commission_${clientIp}`, 5, 15 * 60 * 1000); // 5 submissions per 15 min
-    if (!localRateCheck.success) {
-      console.warn(`[SPAM_PROTECTION] Local rate limit reached for IP: ${clientIp}`);
+    // 1. IP Rate Limiting (Distributed Upstash Redis + Bounded Memory Fallback)
+    const rateCheck = await checkDistributedRateLimit(`commission_${clientIp}`, 5, 15 * 60 * 1000);
+    if (!rateCheck.success) {
+      console.warn(`[SPAM_PROTECTION] Rate limit reached for IP: ${clientIp}`);
       return NextResponse.json(
         { success: false, message: "Too many commission inquiries. Please wait a few minutes before submitting again." },
         { status: 429 }
       );
-    }
-
-    if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-      try {
-        const ratelimit = new Ratelimit({
-          redis: Redis.fromEnv(),
-          limiter: Ratelimit.slidingWindow(5, "1 h"),
-        });
-        const { success } = await ratelimit.limit(`ratelimit_commission_${clientIp}`);
-        if (!success) {
-          console.warn(`[SPAM_PROTECTION] Upstash rate limit reached for IP: ${clientIp}`);
-          return NextResponse.json(
-            { success: false, message: "Too many requests. Please wait a while before submitting again." },
-            { status: 429 }
-          );
-        }
-      } catch (rateLimitErr) {
-        console.error("[RATELIMIT_ERROR] Failed to check Upstash rate limit:", rateLimitErr);
-      }
     }
 
     const body = await req.json();

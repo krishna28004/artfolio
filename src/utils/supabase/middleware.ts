@@ -36,8 +36,19 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
+  const adminEmail = (
+    process.env.ADMIN_NOTIFICATION_EMAIL ||
+    process.env.ADMIN_EMAIL ||
+    "artist@artfolio.luxury"
+  ).toLowerCase().trim();
+
+  const isAuthorizedAdmin =
+    Boolean(user) &&
+    (user?.email?.toLowerCase().trim() === adminEmail ||
+      user?.app_metadata?.role === "admin");
+
   if (
-    !user &&
+    !isAuthorizedAdmin &&
     request.nextUrl.pathname.startsWith('/admin') &&
     !request.nextUrl.pathname.startsWith('/admin/login')
   ) {
@@ -46,7 +57,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (user && request.nextUrl.pathname === '/admin/login') {
+  if (isAuthorizedAdmin && request.nextUrl.pathname === '/admin/login') {
     const url = request.nextUrl.clone()
     url.pathname = '/admin'
     return NextResponse.redirect(url)

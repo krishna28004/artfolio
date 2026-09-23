@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Loader } from "@react-three/drei";
 import { GalleryScene, GalleryArtwork } from "@/components/exhibition/GalleryScene";
+import { ExhibitionErrorBoundary } from "@/components/exhibition/ExhibitionErrorBoundary";
 import { movementState } from "@/components/exhibition/Controls";
 import { Artwork } from "@/features/artwork/data/artworks";
 
@@ -161,8 +162,10 @@ export default function ExhibitionPage() {
                 }}
             />
 
-            {/* R3F Canvas */}
-            <GalleryScene artworks={dbArtworks} />
+            {/* R3F Canvas with WebGL Error Boundary */}
+            <ExhibitionErrorBoundary>
+                <GalleryScene artworks={dbArtworks} />
+            </ExhibitionErrorBoundary>
 
             {/* ========== HUD (shown after entering) ========== */}
             {entered && (

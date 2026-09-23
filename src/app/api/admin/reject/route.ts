@@ -13,15 +13,10 @@ export async function POST(req: NextRequest) {
   try {
     const authResult = await verifyAdminAuth(req);
     if (!authResult.authorized) {
-      const legacyKey = process.env.ADMIN_API_KEY;
-      const authHeader = req.headers.get("authorization") || "";
-      const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-      if (!legacyKey || bearerToken !== legacyKey) {
-        return NextResponse.json(
-          { success: false, message: authResult.error || "Unauthorized administrative clearance." },
-          { status: 401 }
-        );
-      }
+      return NextResponse.json(
+        { success: false, message: authResult.error || "Unauthorized administrative clearance." },
+        { status: 401 }
+      );
     }
 
     const actor = authResult.userEmail || "admin";

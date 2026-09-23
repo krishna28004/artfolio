@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { timingSafeEqualStr } from "@/shared/utils/crypto";
 
 export interface AdminAuthResult {
   authorized: boolean;
@@ -13,8 +14,10 @@ export interface AdminAuthResult {
  * Every privileged route must independently call this verifier.
  *
  * Verifies either:
- * 1. An authenticated Supabase session where the user email matches the authorized admin identity.
- * 2. A secure server-to-server x-admin-key header matching ADMIN_API_SECRET (for internal tasks/tests).
+ * 1. An authenticated Supabase session where the user email matches the authorized admin identity,
+ *    or where server-assigned app_metadata.role === 'admin' (NEVER client-writable user_metadata).
+ * 2. A secure server-to-server header (x-admin-key, x-admin-secret, or Bearer token)
+ *    matching ADMIN_API_SECRET / ADMIN_API_KEY verified in constant time.
  */
 export async function verifyAdminAuth(req?: NextRequest): Promise<AdminAuthResult> {
   const adminEmail = (
@@ -25,10 +28,16 @@ export async function verifyAdminAuth(req?: NextRequest): Promise<AdminAuthResul
 
   // 1. Check API Key Header (if request object is provided)
   if (req) {
-    const adminKeyHeader = req.headers.get("x-admin-key") || req.headers.get("x-admin-secret");
-    const configuredSecret = process.env.ADMIN_API_SECRET;
+    const adminKeyHeader =
+      req.headers.get("x-admin-key") ||
+      req.headers.get("x-admin-secret") ||
+      (req.headers.get("authorization")?.startsWith("Bearer ")
+        ? req.headers.get("authorization")!.slice(7)
+        : null);
 
-    if (configuredSecret && adminKeyHeader && adminKeyHeader === configuredSecret) {
+    const configuredSecret = process.env.ADMIN_API_SECRET || process.env.ADMIN_API_KEY;
+
+    if (configuredSecret && adminKeyHeader && timingSafeEqualStr(adminKeyHeader, configuredSecret)) {
       return { authorized: true, userEmail: adminEmail, source: "api_key" };
     }
   }
@@ -47,9 +56,10 @@ export async function verifyAdminAuth(req?: NextRequest): Promise<AdminAuthResul
 
     const sessionEmail = user.email.toLowerCase().trim();
 
-    // Verify authorized admin identity or admin role metadata
+    // Verify authorized admin identity or server-assigned app_metadata role ONLY.
+    // user_metadata is client-writable upon registration and must NEVER be trusted for authorization.
     const isAuthorizedEmail = sessionEmail === adminEmail;
-    const isAuthorizedRole = user.app_metadata?.role === "admin" || user.user_metadata?.role === "admin";
+    const isAuthorizedRole = user.app_metadata?.role === "admin";
 
     if (!isAuthorizedEmail && !isAuthorizedRole) {
       return {
