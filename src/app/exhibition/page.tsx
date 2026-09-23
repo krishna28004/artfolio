@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Loader } from "@react-three/drei";
-import { GalleryScene } from "@/components/exhibition/GalleryScene";
+import { GalleryScene, GalleryArtwork } from "@/components/exhibition/GalleryScene";
 import { movementState } from "@/components/exhibition/Controls";
+import { Artwork } from "@/features/artwork/data/artworks";
 
 /* Helper: set a movement direction on/off */
 function press(dir: "forward" | "backward" | "left" | "right") {
@@ -19,11 +20,44 @@ export default function ExhibitionPage() {
     const [showWalkHint, setShowWalkHint] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [showHUD, setShowHUD] = useState(false);
+    const [dbArtworks, setDbArtworks] = useState<GalleryArtwork[] | undefined>(undefined);
+
+    useEffect(() => {
+        let isMounted = true;
+        fetch("/api/artworks")
+            .then((res) => res.json())
+            .then((data) => {
+                if (isMounted && data.success && Array.isArray(data.data)) {
+                    const formatted: GalleryArtwork[] = (data.data as Artwork[])
+                        .filter((a) => a.position3D && a.isAvailable)
+                        .map((a) => ({
+                            id: a.id,
+                            url: a.imageUrl,
+                            position: a.position3D as [number, number, number],
+                            rotation: (a.rotation3D as [number, number, number]) || [0, 0, 0],
+                        }));
+                    if (formatted.length > 0) {
+                        setDbArtworks(formatted);
+                    }
+                }
+            })
+            .catch(() => {});
+
+        return () => {
+            isMounted = false;
+        };
+    }, []);
+
+    const triggerWalkHint = () => {
+        setShowWalkHint(true);
+        setTimeout(() => setShowWalkHint(false), 6000);
+    };
 
     useEffect(() => {
         const timer = setTimeout(() => {
             if (localStorage.getItem("artfolio_onboarded")) {
                 setEntered(true);
+                triggerWalkHint();
             }
         }, 100);
         return () => clearTimeout(timer);
@@ -32,12 +66,14 @@ export default function ExhibitionPage() {
     const completeOnboarding = () => {
         localStorage.setItem("artfolio_onboarded", "true");
         setEntered(true);
+        triggerWalkHint();
     };
 
     // Sync fullscreen state if changed by external means (like Esc key)
     useEffect(() => {
         const handleFullscreenChange = () => {
-            setIsFullscreen(!!(document.fullscreenElement || (document as any).webkitFullscreenElement));
+            const doc = document as Document & { webkitFullscreenElement?: Element };
+            setIsFullscreen(!!(document.fullscreenElement || doc.webkitFullscreenElement));
         };
         document.addEventListener("fullscreenchange", handleFullscreenChange);
         document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
@@ -49,15 +85,21 @@ export default function ExhibitionPage() {
 
     const toggleFullscreen = async () => {
         try {
-            if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
-                const elem = document.documentElement as any;
+            const doc = document as Document & {
+                webkitFullscreenElement?: Element;
+                webkitExitFullscreen?: () => Promise<void>;
+            };
+            const elem = document.documentElement as HTMLElement & {
+                webkitRequestFullscreen?: () => Promise<void>;
+            };
+
+            if (!document.fullscreenElement && !doc.webkitFullscreenElement) {
                 if (elem.requestFullscreen) {
                     await elem.requestFullscreen();
                 } else if (elem.webkitRequestFullscreen) {
                     await elem.webkitRequestFullscreen();
                 }
             } else {
-                const doc = document as any;
                 if (doc.exitFullscreen) {
                     await doc.exitFullscreen();
                 } else if (doc.webkitExitFullscreen) {
@@ -69,22 +111,10 @@ export default function ExhibitionPage() {
         }
     };
 
-    // Fade in walk hint after entry, fade out after 6 seconds
-    useEffect(() => {
-        if (entered) {
-            setShowWalkHint(true);
-            const timer = setTimeout(() => {
-                setShowWalkHint(false);
-            }, 6000);
-            return () => clearTimeout(timer);
-        }
-    }, [entered]);
-
-    // Fast-vanish walk hint if they start interacting
+    // Fast-vanish walk hint if user starts interacting
     useEffect(() => {
         if (!showWalkHint) return;
         const dismiss = () => setShowWalkHint(false);
-        // Bind to common walking triggers so the tip instantly hides when they "get it"
         window.addEventListener("dblclick", dismiss);
         window.addEventListener("keydown", dismiss);
         window.addEventListener("pointerdown", dismiss);
@@ -132,7 +162,7 @@ export default function ExhibitionPage() {
             />
 
             {/* R3F Canvas */}
-            <GalleryScene />
+            <GalleryScene artworks={dbArtworks} />
 
             {/* ========== HUD (shown after entering) ========== */}
             {entered && (
@@ -144,6 +174,12 @@ export default function ExhibitionPage() {
                             <p className="font-sans text-muted text-[10px] tracking-[0.15em] uppercase mt-1 opacity-70">
                                 Walk freely · Explore the artworks
                             </p>
+                            <Link
+                                href="/exhibition/accessible"
+                                className="pointer-events-auto inline-block mt-2 text-[10px] uppercase tracking-widest text-primary/80 hover:text-white border-b border-primary/40 pb-0.5 transition-colors"
+                            >
+                                Accessible 2D Exhibition &rarr;
+                            </Link>
                             <button onClick={() => setShowHUD(!showHUD)} className="pointer-events-auto mt-4 px-4 py-2 font-sans text-[10px] uppercase tracking-widest text-[#a0a0a0] border border-white/10 bg-black/60 rounded-md md:hidden hover:bg-white/10 active:scale-95 transition-all">
                                 {showHUD ? "Hide Controls" : "Show Controls"}
                             </button>

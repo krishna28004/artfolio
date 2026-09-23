@@ -1,4 +1,4 @@
-import { useMemo, useRef, useLayoutEffect } from "react";
+import { useRef, useLayoutEffect } from "react";
 import * as THREE from "three";
 
 export function HangingOrb({ position }: { position: [number, number, number] }) {

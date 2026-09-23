@@ -2,23 +2,32 @@
 
 import { useEffect, useState } from "react";
 
-const getMockViews = (id: string) => {
-  let hash = 0;
-  for (let i = 0; i < id.length; i += 1) {
-    hash = id.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return Math.abs(hash % 2000) + 800;
-};
 
 export function useViewCount(artworkId: string) {
-  const [views, setViews] = useState<number>(0);
+  const [views, setViews] = useState<number | null>(null);
 
   useEffect(() => {
-    const baseViews = getMockViews(artworkId);
-    queueMicrotask(() => {
-      setViews(baseViews);
-    });
+    let isMounted = true;
+    if (!artworkId) return;
+
+    // Record authentic view telemetry
+    fetch(`/api/artworks/${encodeURIComponent(artworkId)}/view`, {
+      method: "POST",
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (isMounted && data && typeof data.views === "number") {
+          setViews(data.views);
+        }
+      })
+      .catch(() => {
+        // Telemetry failure fails silently without fabricating counts
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, [artworkId]);
 
-  return { views: views.toLocaleString() };
+  return { views: views !== null ? views.toLocaleString() : null };
 }

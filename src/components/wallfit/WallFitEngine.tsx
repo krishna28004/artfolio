@@ -31,11 +31,12 @@ export const WallFitEngine = forwardRef<WallFitEngineRef, EngineProps>(({ onRead
       if (!fabricRef.current) return;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       fabric.Image.fromURL(dataUrl, (img: any) => {
-        const canvas = fabricRef.current!;
-        const scaleFactor = Math.min(canvas.width! / img.width!, canvas.height! / img.height!);
-        img.set({ originX: 'center', originY: 'center', left: canvas.width! / 2, top: canvas.height! / 2, scaleX: scaleFactor, scaleY: scaleFactor, selectable: false, evented: false });
+        if (!fabricRef.current) return;
+        const canvas = fabricRef.current;
+        const scaleFactor = Math.min((canvas.width || 800) / img.width, (canvas.height || 600) / img.height);
+        img.set({ originX: 'center', originY: 'center', left: (canvas.width || 800) / 2, top: (canvas.height || 600) / 2, scaleX: scaleFactor, scaleY: scaleFactor, selectable: false, evented: false });
         canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
-      });
+      }, { crossOrigin: 'anonymous' });
     },
     loadArtwork: (url: string) => {
       if (!fabricRef.current) return;
@@ -74,15 +75,20 @@ export const WallFitEngine = forwardRef<WallFitEngineRef, EngineProps>(({ onRead
     },
     exportScene: () => {
       if (!fabricRef.current) return;
-      // Terminate bounding boxes for pure screenshot
-      fabricRef.current.discardActiveObject();
-      fabricRef.current.renderAll();
-      // Overclock multiplier for absolute retina rendering quality
-      const dataURL = fabricRef.current.toDataURL({ format: 'jpeg', quality: 1, multiplier: 2 });
-      const link = document.createElement('a');
-      link.href = dataURL;
-      link.download = 'artfolio_simulation.jpg';
-      link.click();
+      try {
+        // Terminate bounding boxes for pure screenshot
+        fabricRef.current.discardActiveObject();
+        fabricRef.current.renderAll();
+        // Overclock multiplier for absolute retina rendering quality
+        const dataURL = fabricRef.current.toDataURL({ format: 'jpeg', quality: 0.95, multiplier: 2 });
+        const link = document.createElement('a');
+        link.href = dataURL;
+        link.download = 'artfolio_simulation.jpg';
+        link.click();
+      } catch (err) {
+        console.error("[WALLFIT_EXPORT_ERROR] Canvas export failed:", err);
+        alert("Simulation export encountered a security restriction. Please ensure third-party cookies or cross-origin images are permitted.");
+      }
     }
   }));
 

@@ -78,8 +78,21 @@ function WalkableFloor() {
     );
 }
 
-export function GalleryScene() {
+export interface GalleryArtwork {
+    id: string;
+    url: string;
+    position: [number, number, number];
+    rotation?: [number, number, number];
+}
+
+interface GallerySceneProps {
+    artworks?: GalleryArtwork[];
+}
+
+export function GalleryScene({ artworks }: GallerySceneProps = {}) {
     const [dpr, setDpr] = React.useState(1.5);
+    const displayArtworks = artworks && artworks.length > 0 ? artworks : ARTWORKS;
+
     return (
         <Canvas
             shadows
@@ -102,8 +115,8 @@ export function GalleryScene() {
                 <BakeShadows />
 
                 {/* Artworks */}
-                {ARTWORKS.map((art, i) => (
-                    <group key={`art-group-${i}`}>
+                {displayArtworks.map((art, i) => (
+                    <group key={`art-group-${art.id || i}`}>
                         <ArtworkFrame {...art} />
                     </group>
                 ))}

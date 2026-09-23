@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect } from "react";
+import React, { useMemo } from "react";
 import { useTexture } from "@react-three/drei";
 import * as THREE from "three";
 
@@ -20,20 +20,18 @@ export function ArtworkFrame({
     scale = [1.5, 2, 1],
 }: Omit<ArtworkFrameProps, "id">) {
     const { gl } = useThree();
-    const texture = useTexture(url);
-    // Apply HD texture filtering and memory management safely once
-    useEffect(() => {
-        texture.colorSpace = THREE.SRGBColorSpace;
-        texture.minFilter = THREE.LinearMipmapLinearFilter;
-        texture.magFilter = THREE.LinearFilter;
-        texture.anisotropy = Math.min(gl.capabilities.getMaxAnisotropy(), 16); // Cap to 16 for stability
-        texture.generateMipmaps = true;
-        texture.needsUpdate = true;
-        
-        return () => {
-            texture.dispose();
-        };
-    }, [texture, gl]);
+    const maxAnisotropy = useMemo(() => Math.min(gl.capabilities.getMaxAnisotropy(), 16), [gl]);
+    const texture = useTexture(url, (loaded) => {
+        if (loaded instanceof THREE.Texture) {
+            loaded.colorSpace = THREE.SRGBColorSpace;
+            loaded.minFilter = THREE.LinearMipmapLinearFilter;
+            loaded.magFilter = THREE.LinearFilter;
+            loaded.anisotropy = maxAnisotropy;
+            loaded.generateMipmaps = true;
+            loaded.needsUpdate = true;
+        }
+    });
+
 
     return (
         <group position={position} rotation={rotation} scale={scale}>

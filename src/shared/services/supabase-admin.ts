@@ -1,34 +1,54 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { Database } from "@/types/supabase";
+
+let adminInstance: SupabaseClient<Database> | null = null;
 
 /**
  * Server-side Supabase admin client using the SERVICE_ROLE key.
  * 
- * This client bypasses Row Level Security (RLS) entirely, making it safe
- * to use for server-side inserts in API routes where the user is not
- * authenticated. NEVER expose this client to the browser.
- * 
- * Requires: SUPABASE_SERVICE_ROLE_KEY in your environment variables.
+ * Bypasses Row Level Security (RLS) entirely. Safe to use for server-side
+ * privileged operations in API routes. NEVER expose this client to the browser.
+ * Lazily initializes to avoid crashes during static build evaluation.
  */
+export function getSupabaseAdmin(): SupabaseClient<Database> {
+  if (adminInstance) return adminInstance;
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!supabaseUrl) {
-  throw new Error("[SUPABASE_ADMIN_FATAL] Missing NEXT_PUBLIC_SUPABASE_URL.");
+  if (!supabaseUrl) {
+    throw new Error("[SUPABASE_ADMIN_FATAL] Missing NEXT_PUBLIC_SUPABASE_URL.");
+  }
+
+  if (!serviceRoleKey) {
+    throw new Error(
+      "[SUPABASE_ADMIN_FATAL] Missing SUPABASE_SERVICE_ROLE_KEY. " +
+      "Please add it to your environment variables. " +
+      "Find it at: Supabase Dashboard > Project Settings > API > service_role key."
+    );
+  }
+
+  adminInstance = createClient<Database>(supabaseUrl, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+
+  return adminInstance;
 }
 
-if (!serviceRoleKey) {
-  throw new Error(
-    "[SUPABASE_ADMIN_FATAL] Missing SUPABASE_SERVICE_ROLE_KEY. " +
-    "Please add it to your environment variables (Vercel dashboard + .env.local). " +
-    "Find it at: Supabase Dashboard > Project Settings > API > service_role key."
-  );
-}
-
-export const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
-  auth: {
-    // Disable auto-refresh for service role clients — not needed on the server.
-    autoRefreshToken: false,
-    persistSession: false,
+/**
+ * Lazy proxy allowing existing code to use `supabaseAdmin.from(...)` unchanged.
+ */
+export const supabaseAdmin = new Proxy({} as SupabaseClient<Database>, {
+  get(_target, prop) {
+    const client = getSupabaseAdmin();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const val = (client as any)[prop];
+    if (typeof val === "function") {
+      return val.bind(client);
+    }
+    return val;
   },
 });

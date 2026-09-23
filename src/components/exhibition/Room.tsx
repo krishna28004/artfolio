@@ -5,9 +5,17 @@ import * as THREE from "three";
 export function Room() {
     // Stable dark wood texture from Unsplash (Walnut/Dark Wood)
     // Compressed via w=1024 to prevent memory saturation natively
-    const floorTexture = useTexture("https://images.unsplash.com/photo-1520699049698-acd2fccb8cc8?q=80&w=1024&auto=format&fit=crop");
-    floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping;
-    floorTexture.repeat.set(4, 8);
+    const floorTexture = useTexture(
+        "https://images.unsplash.com/photo-1520699049698-acd2fccb8cc8?q=80&w=1024&auto=format&fit=crop",
+        (texture) => {
+            if (texture instanceof THREE.Texture) {
+                texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+                texture.repeat.set(4, 8);
+                texture.needsUpdate = true;
+            }
+        }
+    );
+
 
     // Deep Fix: Memoize primitives so they aren't instantiated hundreds of times per render
     const wallMaterial = useMemo(() => new THREE.MeshStandardMaterial({ color: "#e8e6e1", roughness: 0.8, metalness: 0.05 }), []);

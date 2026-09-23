@@ -5,10 +5,16 @@ export interface Artwork {
   year: number;
   description: string;
   imageUrl: string;
+  thumbnailUrl?: string;
+  textureUrl?: string;
   medium: string;
   dimensions: string;
   price?: number;
+  category?: string;
   isAvailable: boolean;
+  position3D?: [number, number, number];
+  rotation3D?: [number, number, number];
+  wallIdentifier?: string;
 }
 
 export const artworks: Artwork[] = [

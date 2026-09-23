@@ -1,14 +1,36 @@
 "use client";
+import { useEffect, useState } from "react";
 import { Section } from "@/components/layout/Section";
 import { ArtCard } from "@/components/gallery/ArtCard";
-import { artworks } from "@/features/artwork/data/artworks";
+import { Artwork } from "@/features/artwork/data/artworks";
 import { useFavorites } from "@/features/favorites/hooks/use-favorites";
 import Link from "next/link";
 
 export default function SavedPage() {
     const { favorites } = useFavorites();
+    const [allArtworks, setAllArtworks] = useState<Artwork[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    const savedArtworks = artworks.filter((artwork) => favorites.includes(artwork.id));
+    useEffect(() => {
+        let isMounted = true;
+        fetch("/api/artworks")
+            .then((res) => res.json())
+            .then((data) => {
+                if (isMounted && data.success && Array.isArray(data.data)) {
+                    setAllArtworks(data.data);
+                }
+            })
+            .catch((err) => console.warn("[SAVED_ARTWORKS_FETCH_ERROR]", err))
+            .finally(() => {
+                if (isMounted) setLoading(false);
+            });
+
+        return () => {
+            isMounted = false;
+        };
+    }, []);
+
+    const savedArtworks = allArtworks.filter((artwork) => favorites.includes(artwork.id));
 
     return (
         <div className="flex-1 flex flex-col bg-background">
@@ -20,7 +42,12 @@ export default function SavedPage() {
                     </p>
                 </header>
 
-                {savedArtworks.length > 0 ? (
+                {loading ? (
+                    <div className="py-32 flex flex-col items-center justify-center text-center">
+                        <div className="w-8 h-8 border border-primary/30 border-t-primary rounded-full animate-spin mb-4" />
+                        <p className="font-sans text-[11px] tracking-[0.2em] uppercase text-muted">Retrieving Archival Records...</p>
+                    </div>
+                ) : savedArtworks.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-16">
                         {savedArtworks.map((artwork, index) => (
                             <ArtCard key={artwork.id} artwork={artwork} index={index} />

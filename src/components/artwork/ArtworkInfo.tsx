@@ -54,7 +54,7 @@ export function ArtworkInfo({ id, title, artist, year, medium, dimensions, descr
     window.open(`https://wa.me/?text=${text}`, '_blank');
   };
 
-  // High-def default artwork mock URL for WallFit Simulation when API is locally unreachable
+  // High-def default artwork fallback URL for WallFit Simulation when image is unreachable
   const targetImg = imageUrl || "https://images.unsplash.com/photo-1541961017774-22349e4a1262?q=80&w=1500";
 
   return (
@@ -65,7 +65,7 @@ export function ArtworkInfo({ id, title, artist, year, medium, dimensions, descr
         {/* Subtle Popularity Badge (Archival style) */}
         <div className="flex items-center gap-1.5 mb-6 text-[11px] uppercase tracking-[0.2em] text-muted/40 font-sans">
           <Eye className="w-3 h-3" />
-          <span>Ref. {views} Views</span>
+          <span>{views !== null ? `Ref. ${views} Views` : `Archival Masterpiece`}</span>
         </div>
 
         {/* Editorial Header Array */}
