@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Playfair_Display } from "next/font/google";
-import { Navbar } from "@/components/layout/Navbar";
-import { Footer } from "@/components/layout/Footer";
+import { AppChrome } from "@/components/layout/AppChrome";
 import { OfflineWarning } from "@/components/ui/OfflineWarning";
 import "./globals.css";
 
@@ -21,8 +20,8 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Artfolio | Premium Digital Artefacts",
     description: "Curated digital excellence. Preview your acquisition physically before commitment.",
-    type: "website"
-  }
+    type: "website",
+  },
 };
 
 export default function RootLayout({
@@ -37,9 +36,7 @@ export default function RootLayout({
     >
       <body className="antialiased">
         <OfflineWarning />
-        <Navbar />
-        {children}
-        <Footer />
+        <AppChrome>{children}</AppChrome>
       </body>
     </html>
   );

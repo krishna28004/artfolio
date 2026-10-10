@@ -1,13 +1,28 @@
 import { getSupabase } from "@/shared/services/supabase";
-import { artworks as staticArtworks, Artwork } from "@/features/artwork/data/artworks";
+import { artworks as staticArtworks } from "@/features/artwork/data/artworks";
+import type { Artwork } from "@/features/artwork/data/artworks";
+import { isValid3DPosition, isValid3DRotation } from "@/features/artwork/utils/exhibition-validation";
 import type { Database } from "@/types/supabase";
 
 type DbArtwork = Database["public"]["Tables"]["artworks"]["Row"];
 
 /**
  * Maps a Supabase database artwork row to the frontend Artwork domain model.
+ * If 3D exhibition coordinates are missing or invalid in DB, merges curated spatial placement.
  */
 export function mapDbArtworkToDomain(dbArt: DbArtwork): Artwork {
+  const staticMatch = staticArtworks.find((s) => s.id === dbArt.id);
+
+  const position3D =
+    Array.isArray(dbArt.position_3d) && isValid3DPosition(dbArt.position_3d)
+      ? (dbArt.position_3d as [number, number, number])
+      : staticMatch?.position3D;
+
+  const rotation3D =
+    Array.isArray(dbArt.rotation_3d) && isValid3DRotation(dbArt.rotation_3d)
+      ? (dbArt.rotation_3d as [number, number, number])
+      : staticMatch?.rotation3D;
+
   return {
     id: dbArt.id,
     title: dbArt.title,
@@ -16,14 +31,15 @@ export function mapDbArtworkToDomain(dbArt: DbArtwork): Artwork {
     description: dbArt.description || "",
     imageUrl: dbArt.image_url,
     thumbnailUrl: dbArt.thumbnail_url || undefined,
+    textureUrl: staticMatch?.textureUrl || dbArt.image_url,
     medium: dbArt.medium || "Pencil on Paper",
     dimensions: dbArt.dimensions || "A3 Sheet",
     price: dbArt.price || undefined,
     category: dbArt.category || undefined,
     isAvailable: dbArt.is_available,
-    position3D: Array.isArray(dbArt.position_3d) ? (dbArt.position_3d as [number, number, number]) : undefined,
-    rotation3D: Array.isArray(dbArt.rotation_3d) ? (dbArt.rotation_3d as [number, number, number]) : undefined,
-    wallIdentifier: dbArt.wall_identifier || undefined,
+    position3D,
+    rotation3D,
+    wallIdentifier: dbArt.wall_identifier || staticMatch?.wallIdentifier,
   };
 }
 

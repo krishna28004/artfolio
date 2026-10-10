@@ -70,7 +70,7 @@
 
 @layer base {
   body {
-    @apply bg-background text-text min-h-full flex flex-col pt-16 font-sans antialiased;
+    @apply bg-background text-text min-h-full flex flex-col font-sans antialiased;
   }
 
   ::selection {

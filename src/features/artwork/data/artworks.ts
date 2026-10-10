@@ -26,9 +26,13 @@ export const artworks: Artwork[] = [
     description:
       "A striking portrait of a child bathed in projected stripes of light. The interplay between shadow and luminance across the skin reveals an extraordinary depth of tone and texture, transforming the human form into a living landscape of light.",
     imageUrl: "/images/artworks/luminous-veil.jpg",
+    textureUrl: "/images/artworks/exhibition/luminous-veil.jpg",
     medium: "Pencil on Paper",
     dimensions: "A3 Sheet",
     isAvailable: true,
+    position3D: [-24.92, 2.1, -28],
+    rotation3D: [0, Math.PI / 2, 0],
+    wallIdentifier: "west-wall-1",
   },
   {
     id: "sovereign-gaze",
@@ -38,9 +42,13 @@ export const artworks: Artwork[] = [
     description:
       "A hyper-realistic close-up of a tiger face, rendered with painstaking fur-by-fur detail. The piercing eyes and symmetrical stripe patterns convey an overwhelming presence - raw power frozen in graphite.",
     imageUrl: "/images/artworks/sovereign-gaze.jpg",
+    textureUrl: "/images/artworks/exhibition/sovereign-gaze.jpg",
     medium: "Pencil on Paper",
     dimensions: "A3 Sheet",
     isAvailable: true,
+    position3D: [-24.92, 2.1, -12],
+    rotation3D: [0, Math.PI / 2, 0],
+    wallIdentifier: "west-wall-2",
   },
   {
     id: "monsoon-child",
@@ -50,9 +58,13 @@ export const artworks: Artwork[] = [
     description:
       "A child pours water over their head from a steel cup, every single droplet captured in exquisite photorealistic detail. The bokeh background and glistening skin showcase mastery over water reflections in graphite.",
     imageUrl: "/images/artworks/monsoon-child.jpg",
+    textureUrl: "/images/artworks/exhibition/monsoon-child.jpg",
     medium: "Pencil on Paper",
     dimensions: "A3 Sheet",
     isAvailable: true,
+    position3D: [-24.92, 2.1, 4],
+    rotation3D: [0, Math.PI / 2, 0],
+    wallIdentifier: "west-wall-3",
   },
   {
     id: "tears-in-the-rain",
@@ -62,9 +74,13 @@ export const artworks: Artwork[] = [
     description:
       "An intimate close-up of a child face with eyes gently closed as rain cascades down. The water droplets clinging to skin, the serene expression amid the downpour - a meditation on innocence and vulnerability.",
     imageUrl: "/images/artworks/tears-in-the-rain.jpg",
+    textureUrl: "/images/artworks/exhibition/tears-in-the-rain.jpg",
     medium: "Pencil on Paper",
     dimensions: "A3 Sheet",
     isAvailable: true,
+    position3D: [-24.92, 2.1, 20],
+    rotation3D: [0, Math.PI / 2, 0],
+    wallIdentifier: "west-wall-4",
   },
   {
     id: "the-dreamer",
@@ -74,9 +90,13 @@ export const artworks: Artwork[] = [
     description:
       "A warm, inviting portrait of a young man with tousled hair and a gentle smile. The soft tonal gradations and lifelike sparkle in the eyes demonstrate exceptional control over light and shadow in graphite.",
     imageUrl: "/images/artworks/the-dreamer.jpg",
+    textureUrl: "/images/artworks/exhibition/the-dreamer.jpg",
     medium: "Pencil on Paper",
     dimensions: "A3 Sheet",
     isAvailable: true,
+    position3D: [24.92, 2.1, -28],
+    rotation3D: [0, -Math.PI / 2, 0],
+    wallIdentifier: "east-wall-1",
   },
   {
     id: "behind-the-lens",
@@ -86,9 +106,13 @@ export const artworks: Artwork[] = [
     description:
       "A charismatic portrait of a man in round sunglasses and a tailored blazer. The pencil work captures the transparent quality of the lenses, the texture of facial hair, and the warmth of a genuine smile.",
     imageUrl: "/images/artworks/behind-the-lens.jpg",
+    textureUrl: "/images/artworks/exhibition/behind-the-lens.jpg",
     medium: "Pencil on Paper",
     dimensions: "A3 Sheet",
     isAvailable: true,
+    position3D: [24.92, 2.1, -12],
+    rotation3D: [0, -Math.PI / 2, 0],
+    wallIdentifier: "east-wall-2",
   },
   {
     id: "radiant-spirit",
@@ -98,9 +122,13 @@ export const artworks: Artwork[] = [
     description:
       "A joyful portrait capturing an infectious, beaming smile. The collar detail and soft skin tones showcase delicate pencil pressure control, while the radiant energy leaps off the paper.",
     imageUrl: "/images/artworks/radiant-spirit.jpg",
+    textureUrl: "/images/artworks/exhibition/radiant-spirit.jpg",
     medium: "Pencil on Paper",
     dimensions: "A3 Sheet",
     isAvailable: true,
+    position3D: [24.92, 2.1, 4],
+    rotation3D: [0, -Math.PI / 2, 0],
+    wallIdentifier: "east-wall-3",
   },
   {
     id: "chrome-elegy",
@@ -110,9 +138,13 @@ export const artworks: Artwork[] = [
     description:
       "A hyper-realistic study of a chrome water faucet, exploring metallic reflections and distortions. The polished surface becomes a mirror world rendered entirely in graphite - a testament to observational precision.",
     imageUrl: "/images/artworks/chrome-elegy.jpg",
+    textureUrl: "/images/artworks/exhibition/chrome-elegy.jpg",
     medium: "Pencil on Paper",
     dimensions: "A3 Sheet",
     isAvailable: true,
+    position3D: [24.92, 2.1, 20],
+    rotation3D: [0, -Math.PI / 2, 0],
+    wallIdentifier: "east-wall-4",
   },
   {
     id: "the-curious-mr-bean",
@@ -122,9 +154,13 @@ export const artworks: Artwork[] = [
     description:
       "Rowan Atkinson captured in his iconic Mr. Bean persona, peeking curiously from behind a wall. The wide-eyed expression, the bow tie, and the perfectly timed comedic tension are all rendered with remarkable accuracy.",
     imageUrl: "/images/artworks/the-curious-mr-bean.jpg",
+    textureUrl: "/images/artworks/exhibition/the-curious-mr-bean.jpg",
     medium: "Pencil on Paper",
     dimensions: "A3 Sheet",
     isAvailable: true,
+    position3D: [-10, 2.1, -39.92],
+    rotation3D: [0, 0, 0],
+    wallIdentifier: "north-wall-1",
   },
   {
     id: "sorcerer-supreme",
@@ -134,8 +170,12 @@ export const artworks: Artwork[] = [
     description:
       "A dramatic portrait inspired by Doctor Strange, featuring an ornate high collar and intense sidelong gaze. The intricate costume detailing and moody lighting showcase advanced pencil rendering technique.",
     imageUrl: "/images/artworks/sorcerer-supreme.jpg",
+    textureUrl: "/images/artworks/exhibition/sorcerer-supreme.jpg",
     medium: "Pencil on Paper",
     dimensions: "A3 Sheet",
     isAvailable: true,
+    position3D: [10, 2.1, -39.92],
+    rotation3D: [0, 0, 0],
+    wallIdentifier: "north-wall-2",
   },
 ];

@@ -3,14 +3,14 @@ import { useTexture, Instances, Instance } from "@react-three/drei";
 import * as THREE from "three";
 
 export function Room() {
-    // Stable dark wood texture from Unsplash (Walnut/Dark Wood)
-    // Compressed via w=1024 to prevent memory saturation natively
+    // High-performance local dark wood texture (Walnut/Dark Wood)
     const floorTexture = useTexture(
-        "https://images.unsplash.com/photo-1520699049698-acd2fccb8cc8?q=80&w=1024&auto=format&fit=crop",
+        "/images/exhibition/floor-wood.jpg",
         (texture) => {
             if (texture instanceof THREE.Texture) {
                 texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
                 texture.repeat.set(4, 8);
+                texture.colorSpace = THREE.SRGBColorSpace;
                 texture.needsUpdate = true;
             }
         }

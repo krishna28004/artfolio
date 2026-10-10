@@ -6,7 +6,7 @@ const cspHeader = `
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
   img-src 'self' blob: data: https://res.cloudinary.com https://images.unsplash.com https://*.supabase.co https://*.razorpay.com;
   font-src 'self' data: https://fonts.gstatic.com;
-  connect-src 'self' https://api.cloudinary.com https://*.supabase.co wss://*.supabase.co https://api.razorpay.com https://lumberjack.razorpay.com https://checkout.razorpay.com;
+  connect-src 'self' https://raw.githack.com https://raw.githubusercontent.com https://api.cloudinary.com https://*.supabase.co wss://*.supabase.co https://api.razorpay.com https://lumberjack.razorpay.com https://checkout.razorpay.com;
   frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com;
   object-src 'none';
   base-uri 'self';

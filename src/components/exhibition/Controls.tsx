@@ -1,230 +1,422 @@
+"use client";
+
 import { useEffect, useRef, useMemo } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { PointerLockControls } from "@react-three/drei";
+import { PointerLockControls as DreiPointerLockControls } from "@react-three/drei";
 import * as THREE from "three";
-import { ARTWORKS } from "./GalleryScene";
+import { ARTWORKS, GalleryArtwork } from "./GalleryScene";
+import { VISITOR_BOUNDS } from "@/features/artwork/utils/exhibition-validation";
+import { moveWithCollision } from "./physics/collision";
 
-const WALK_TO_SPEED = 3;
-const BOUNDARY = { minX: -23, maxX: 23, minZ: -38, maxZ: 38 };
+export const WALK_SPEED = 3.5;
+export const SPRINT_SPEED = 5.8;
+export const BASE_EYE_HEIGHT = 1.65;
+const BOUNDARY = VISITOR_BOUNDS;
 
-/* Global movement state driven by on-screen HTML buttons */
+/* Global movement state driven by on-screen HTML buttons (mobile) */
 export const movementState = {
-    forward: false,
-    backward: false,
-    left: false,
-    right: false,
+  forward: false,
+  backward: false,
+  left: false,
+  right: false,
 };
 
-/* Global walk-to target set by double-click on the floor */
+/* Global walk-to target set by double-click or tap on the floor */
 export const walkToTarget = {
-    active: false,
-    x: 0,
-    z: 0,
+  active: false,
+  x: 0,
+  z: 0,
 };
 
-export function Controls() {
-    const { camera, gl } = useThree();
-    const cameraRef = useRef(camera);
+export interface ControlsProps {
+  artworks?: GalleryArtwork[];
+  onFocusArtwork?: (art: GalleryArtwork | null) => void;
+  initialPosition?: [number, number, number];
+  boundary?: { minX: number; maxX: number; minZ: number; maxZ: number };
+  useLegacyHall?: boolean;
+  prefersReducedMotion?: boolean;
+  onPointerLockChange?: (locked: boolean) => void;
+  mouseSensitivity?: number;
+}
 
-    useEffect(() => {
-        cameraRef.current = camera;
-    }, [camera]);
+export function Controls({
+  artworks = ARTWORKS,
+  onFocusArtwork,
+  initialPosition = [0, 1.65, 27],
+  boundary = BOUNDARY,
+  useLegacyHall = false,
+  prefersReducedMotion = false,
+  onPointerLockChange,
+  mouseSensitivity = 1.0,
+}: ControlsProps) {
+  const { camera, gl } = useThree();
+  const cameraRef = useRef(camera);
+  const onFocusArtworkRef = useRef(onFocusArtwork);
+  const onPointerLockChangeRef = useRef(onPointerLockChange);
 
-    const keys = useRef<Set<string>>(new Set());
-    const targetAlignQuat = useRef<THREE.Quaternion | null>(null);
-    const lastAlignCheck = useRef(0);
-    const tempCamera = useMemo(() => new THREE.PerspectiveCamera(), []);
+  useEffect(() => {
+    cameraRef.current = camera;
+  }, [camera]);
 
-    // Setup input listeners
-    useEffect(() => {
-        const down = (e: KeyboardEvent) => {
-            keys.current.add(e.code);
-            if (["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) {
-                walkToTarget.active = false;
-            }
-        };
-        const up = (e: KeyboardEvent) => keys.current.delete(e.code);
-        window.addEventListener("keydown", down);
-        window.addEventListener("keyup", up);
+  useEffect(() => {
+    onFocusArtworkRef.current = onFocusArtwork;
+  }, [onFocusArtwork]);
 
-        const currentCam = cameraRef.current;
-        if (currentCam) {
-            currentCam.position.set(0, 1.6, 18);
+  useEffect(() => {
+    onPointerLockChangeRef.current = onPointerLockChange;
+  }, [onPointerLockChange]);
+
+  const keys = useRef<Set<string>>(new Set());
+  const velocity = useRef(new THREE.Vector3());
+  const isPointerLocked = useRef(false);
+  const targetAlignQuat = useRef<THREE.Quaternion | null>(null);
+  const lastAlignCheck = useRef(0);
+  const headBobTimer = useRef(0);
+  const tempCamera = useMemo(() => new THREE.PerspectiveCamera(), []);
+  const currentlyFocusedId = useRef<string | null>(null);
+
+  // Setup keyboard input listeners and focus cleanup
+  useEffect(() => {
+    const clearInputs = () => {
+      keys.current.clear();
+      movementState.forward = false;
+      movementState.backward = false;
+      movementState.left = false;
+      movementState.right = false;
+    };
+
+    const down = (e: KeyboardEvent) => {
+      // Ignore if user is typing in an input or textarea
+      if (
+        document.activeElement?.tagName === "INPUT" ||
+        document.activeElement?.tagName === "TEXTAREA"
+      ) {
+        return;
+      }
+
+      // Prevent accidental browser scrolling from movement keys only while active
+      if (
+        [
+          "KeyW",
+          "KeyA",
+          "KeyS",
+          "KeyD",
+          "ArrowUp",
+          "ArrowDown",
+          "ArrowLeft",
+          "ArrowRight",
+          "Space",
+        ].includes(e.code)
+      ) {
+        if (isPointerLocked.current) {
+          e.preventDefault();
         }
+      }
 
-        return () => {
-            window.removeEventListener("keydown", down);
-            window.removeEventListener("keyup", up);
-        };
-    }, []);
+      keys.current.add(e.code);
+      if (
+        [
+          "KeyW",
+          "KeyA",
+          "KeyS",
+          "KeyD",
+          "ArrowUp",
+          "ArrowDown",
+          "ArrowLeft",
+          "ArrowRight",
+        ].includes(e.code)
+      ) {
+        walkToTarget.active = false;
+      }
+    };
 
-    // Mobile touch-to-look implementation
-    useEffect(() => {
-        let lastTouchX = 0;
-        let lastTouchY = 0;
-        const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+    const up = (e: KeyboardEvent) => {
+      keys.current.delete(e.code);
+    };
 
-        const onTouchStart = (e: TouchEvent) => {
-            if (e.touches.length > 0) {
-                lastTouchX = e.touches[0].pageX;
-                lastTouchY = e.touches[0].pageY;
-            }
-        };
+    const handleBlur = () => {
+      clearInputs();
+    };
 
-        const onTouchMove = (e: TouchEvent) => {
-            const activeCam = cameraRef.current;
-            if (!activeCam) return;
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        clearInputs();
+      }
+    };
 
-            // Only capture look if not using multi-touch
-            if (e.touches.length === 1) {
-                const touchX = e.touches[0].pageX;
-                const touchY = e.touches[0].pageY;
-                const deltaX = touchX - lastTouchX;
-                const deltaY = touchY - lastTouchY;
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    window.addEventListener("blur", handleBlur);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
-                euler.setFromQuaternion(activeCam.quaternion);
-                
-                // Sensitivity modifier
-                euler.y -= deltaX * 0.005;
-                euler.x -= deltaY * 0.005;
+    const currentCam = cameraRef.current;
+    if (currentCam) {
+      currentCam.position.set(initialPosition[0], initialPosition[1], initialPosition[2]);
+    }
 
-                // Pitch clamp: limit to ±30 degrees
-                const limit = 30 * Math.PI / 180;
-                euler.x = Math.max(-limit, Math.min(limit, euler.x));
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", handleBlur);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      clearInputs();
+    };
+  }, [initialPosition]);
 
-                activeCam.quaternion.setFromEuler(euler);
+  // Mobile touch-to-look implementation
+  useEffect(() => {
+    let lastTouchX = 0;
+    let lastTouchY = 0;
+    const euler = new THREE.Euler(0, 0, 0, "YXZ");
 
-                // Cancel alignment if user manually scrolls
-                targetAlignQuat.current = null;
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length > 0) {
+        lastTouchX = e.touches[0].pageX;
+        lastTouchY = e.touches[0].pageY;
+      }
+    };
 
-                lastTouchX = touchX;
-                lastTouchY = touchY;
-            }
-        };
+    const onTouchMove = (e: TouchEvent) => {
+      const activeCam = cameraRef.current;
+      if (!activeCam) return;
 
-        const domElement = gl.domElement;
-        domElement.addEventListener('touchstart', onTouchStart, { passive: true });
-        domElement.addEventListener('touchmove', onTouchMove, { passive: false });
+      if (e.touches.length === 1) {
+        const touchX = e.touches[0].pageX;
+        const touchY = e.touches[0].pageY;
+        const deltaX = touchX - lastTouchX;
+        const deltaY = touchY - lastTouchY;
 
-        return () => {
-            domElement.removeEventListener('touchstart', onTouchStart);
-            domElement.removeEventListener('touchmove', onTouchMove);
-        };
-    }, [gl.domElement]);
+        euler.setFromQuaternion(activeCam.quaternion);
 
-    const velocity = useRef(new THREE.Vector3());
+        // Smooth touch sensitivity
+        euler.y -= deltaX * 0.005;
+        euler.x -= deltaY * 0.005;
 
-    useFrame((state, delta) => {
-        const cam = state.camera;
-        const safeDelta = Math.min(delta, 0.1);
-        const k = keys.current;
-        const m = movementState;
+        // Pitch clamp: limit to ±45 degrees
+        const limit = (45 * Math.PI) / 180;
+        euler.x = Math.max(-limit, Math.min(limit, euler.x));
 
-        // --- Soft Auto-Alignment UX logic ---
-        // Throttle proximity scan (0.1s interval = 10Hz) to prevent O(n) frame stall
-        if (state.clock.elapsedTime - lastAlignCheck.current > 0.1) {
-            lastAlignCheck.current = state.clock.elapsedTime;
-            
-            let nearest: typeof ARTWORKS[0] | null = null;
-            let minDist = 6.0; // Only trigger in proximity
+        activeCam.quaternion.setFromEuler(euler);
+        targetAlignQuat.current = null;
 
-            for (const art of ARTWORKS) {
-                const dx = art.position[0] - cam.position.x;
-                const dz = art.position[2] - cam.position.z;
-                const dist = Math.sqrt(dx * dx + dz * dz);
-                if (dist < minDist) {
-                    minDist = dist;
-                    nearest = art;
-                }
-            }
+        lastTouchX = touchX;
+        lastTouchY = touchY;
+      }
+    };
 
-            if (nearest && !walkToTarget.active) {
-                const dirToArt = new THREE.Vector3(
-                    nearest.position[0] - cam.position.x,
-                    nearest.position[1] - cam.position.y,
-                    nearest.position[2] - cam.position.z
-                ).normalize();
+    const domElement = gl.domElement;
+    domElement.addEventListener("touchstart", onTouchStart, { passive: true });
+    domElement.addEventListener("touchmove", onTouchMove, { passive: false });
 
-                const forward = new THREE.Vector3();
-                cam.getWorldDirection(forward);
+    return () => {
+      domElement.removeEventListener("touchstart", onTouchStart);
+      domElement.removeEventListener("touchmove", onTouchMove);
+    };
+  }, [gl.domElement]);
 
-                const dot = forward.dot(dirToArt);
-                // Requires strong gaze lock (over 0.85) to avoid feeling "forced"
-                if (dot > 0.85) {
-                    tempCamera.position.copy(cam.position);
-                    // Keep horizon absolutely stable by aligning only yaw
-                    tempCamera.lookAt(nearest.position[0], cam.position.y, nearest.position[2]);
-                    
-                    const angleDiff = cam.quaternion.angleTo(tempCamera.quaternion);
-                    // Deadzone: stop near 0.01 to prevent micro-jitter, and max diff 0.4 keeps it from whipping around
-                    if (angleDiff > 0.01 && angleDiff < 0.4) {
-                        targetAlignQuat.current = tempCamera.quaternion.clone();
-                    } else {
-                        targetAlignQuat.current = null;
-                    }
-                } else {
-                    targetAlignQuat.current = null; // User looked away
-                }
-            } else {
-                targetAlignQuat.current = null;
-            }
+  // Frame update loop: velocity, swept continuous collision, head bob
+  useFrame((state, delta) => {
+    const cam = state.camera;
+    const safeDelta = Math.min(delta, 0.05); // Bounded timestep prevents delta spikes
+    const k = keys.current;
+    const m = movementState;
+    const nowSec = performance.now() / 1000;
+
+    // --- Soft Auto-Alignment & Proximity Detection UX logic ---
+    if (nowSec - lastAlignCheck.current > 0.1) {
+      lastAlignCheck.current = nowSec;
+
+      let nearest: GalleryArtwork | null = null;
+      let minDist = 5.5;
+
+      const activeArtList = artworks.length > 0 ? artworks : ARTWORKS;
+
+      for (const art of activeArtList) {
+        const dx = art.position[0] - cam.position.x;
+        const dz = art.position[2] - cam.position.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist < minDist) {
+          minDist = dist;
+          nearest = art;
         }
+      }
 
-        // Apply smooth slerp if active
-        if (targetAlignQuat.current && !walkToTarget.active) {
-            cam.quaternion.slerp(targetAlignQuat.current, safeDelta * 4);
-        }
+      if (nearest && !walkToTarget.active) {
+        const dirToArt = new THREE.Vector3(
+          nearest.position[0] - cam.position.x,
+          nearest.position[1] - cam.position.y,
+          nearest.position[2] - cam.position.z
+        ).normalize();
 
-        // --- Double-click walk-to logic ---
-        if (walkToTarget.active) {
-            cam.position.x = THREE.MathUtils.damp(cam.position.x, walkToTarget.x, WALK_TO_SPEED, safeDelta);
-            cam.position.z = THREE.MathUtils.damp(cam.position.z, walkToTarget.z, WALK_TO_SPEED, safeDelta);
-            
-            const distSq = Math.pow(walkToTarget.x - cam.position.x, 2) + Math.pow(walkToTarget.z - cam.position.z, 2);
-            if (distSq < 0.02) {
-                walkToTarget.active = false;
-            }
-            cam.position.y = THREE.MathUtils.damp(cam.position.y, 1.6, 5, safeDelta);
-            return; // skip manual movement while auto-walking
-        }
-
-        // --- Manual movement (keyboard + buttons) ---
         const forward = new THREE.Vector3();
-        const right = new THREE.Vector3();
         cam.getWorldDirection(forward);
-        forward.y = 0;
-        forward.normalize();
-        right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
 
-        const dir = new THREE.Vector3();
-        if (k.has("KeyW") || k.has("ArrowUp") || m.forward) dir.add(forward);
-        if (k.has("KeyS") || k.has("ArrowDown") || m.backward) dir.sub(forward);
-        if (k.has("KeyA") || k.has("ArrowLeft") || m.left) dir.sub(right);
-        if (k.has("KeyD") || k.has("ArrowRight") || m.right) dir.add(right);
+        const dot = forward.dot(dirToArt);
+        if (dot > 0.82) {
+          if (currentlyFocusedId.current !== nearest.id) {
+            currentlyFocusedId.current = nearest.id;
+            onFocusArtworkRef.current?.(nearest);
+          }
 
-        if (dir.lengthSq() > 0) {
-            dir.normalize();
-            velocity.current.add(dir.multiplyScalar(25 * safeDelta)); // Intentionally smooth acceleration
-            
-            // Cancel alignment if user starts walking
+          tempCamera.position.copy(cam.position);
+          tempCamera.lookAt(nearest.position[0], cam.position.y, nearest.position[2]);
+
+          const angleDiff = cam.quaternion.angleTo(tempCamera.quaternion);
+          if (angleDiff > 0.01 && angleDiff < 0.4) {
+            targetAlignQuat.current = tempCamera.quaternion.clone();
+          } else {
             targetAlignQuat.current = null;
+          }
+        } else {
+          targetAlignQuat.current = null;
+          if (currentlyFocusedId.current !== null) {
+            currentlyFocusedId.current = null;
+            onFocusArtworkRef.current?.(null);
+          }
         }
+      } else {
+        targetAlignQuat.current = null;
+        if (currentlyFocusedId.current !== null) {
+          currentlyFocusedId.current = null;
+          onFocusArtworkRef.current?.(null);
+        }
+      }
+    }
 
-        // Velocity damping (smooth deceleration)
-        velocity.current.multiplyScalar(0.82); 
-        if (velocity.current.lengthSq() < 0.001) velocity.current.set(0, 0, 0);
+    // Apply smooth slerp if auto-aligning to artwork
+    if (targetAlignQuat.current && !walkToTarget.active) {
+      cam.quaternion.slerp(targetAlignQuat.current, safeDelta * 4);
+    }
 
-        cam.position.x += velocity.current.x * safeDelta;
-        cam.position.z += velocity.current.z * safeDelta;
+    // --- Double-click / tap walk-to logic with collision safety ---
+    if (walkToTarget.active) {
+      const dx = walkToTarget.x - cam.position.x;
+      const dz = walkToTarget.z - cam.position.z;
+      const dist = Math.hypot(dx, dz);
 
-        // Strict boundary clamping to prevent clipping through walls
-        cam.position.x = Math.max(BOUNDARY.minX, Math.min(BOUNDARY.maxX, cam.position.x));
-        cam.position.z = Math.max(BOUNDARY.minZ, Math.min(BOUNDARY.maxZ, cam.position.z));
-        
-        // Soft Y height handling — strict 1.6 eye-level
-        cam.position.y = THREE.MathUtils.damp(cam.position.y, 1.6, 5, safeDelta);
-    });
+      if (dist < 0.2) {
+        walkToTarget.active = false;
+        velocity.current.set(0, 0, 0);
+      } else {
+        const moveVel = {
+          x: (dx / dist) * WALK_SPEED,
+          z: (dz / dist) * WALK_SPEED,
+        };
 
-    // We use PointerLockControls, locking max/min polar angles to ±30 degrees from horizontal
-    return <PointerLockControls minPolarAngle={Math.PI / 2 - 30 * Math.PI / 180} maxPolarAngle={Math.PI / 2 + 30 * Math.PI / 180} />;
+        if (useLegacyHall) {
+          cam.position.x += moveVel.x * safeDelta;
+          cam.position.z += moveVel.z * safeDelta;
+          cam.position.x = Math.max(boundary.minX, Math.min(boundary.maxX, cam.position.x));
+          cam.position.z = Math.max(boundary.minZ, Math.min(boundary.maxZ, cam.position.z));
+        } else {
+          const res = moveWithCollision(
+            { x: cam.position.x, z: cam.position.z },
+            moveVel,
+            safeDelta
+          );
+          cam.position.x = res.position.x;
+          cam.position.z = res.position.z;
+          if (res.collided) {
+            walkToTarget.active = false;
+          }
+        }
+      }
+
+      cam.position.y = THREE.MathUtils.damp(cam.position.y, BASE_EYE_HEIGHT, 5, safeDelta);
+      return;
+    }
+
+    // --- Manual First-Person Movement (WASD / Arrows / Shift Sprint) ---
+    const forward = new THREE.Vector3();
+    const right = new THREE.Vector3();
+    cam.getWorldDirection(forward);
+    forward.y = 0;
+    forward.normalize();
+    right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+
+    const inputDir = new THREE.Vector3();
+    if (k.has("KeyW") || k.has("ArrowUp") || m.forward) inputDir.add(forward);
+    if (k.has("KeyS") || k.has("ArrowDown") || m.backward) inputDir.sub(forward);
+    if (k.has("KeyA") || k.has("ArrowLeft") || m.left) inputDir.sub(right);
+    if (k.has("KeyD") || k.has("ArrowRight") || m.right) inputDir.add(right);
+
+    // Sprint modifier
+    const isSprinting = k.has("ShiftLeft") || k.has("ShiftRight");
+    const targetSpeed = isSprinting ? SPRINT_SPEED : WALK_SPEED;
+
+    let hasInput = false;
+    let targetVelX = 0;
+    let targetVelZ = 0;
+
+    if (inputDir.lengthSq() > 0.0001) {
+      inputDir.normalize(); // Normalized diagonal: guarantees diagonal speed == straight line speed
+      hasInput = true;
+      targetVelX = inputDir.x * targetSpeed;
+      targetVelZ = inputDir.z * targetSpeed;
+      targetAlignQuat.current = null;
+    }
+
+    // Frame-rate independent exponential acceleration & deceleration
+    const decayRate = hasInput ? 14.0 : 16.0;
+    const damp = 1.0 - Math.exp(-decayRate * safeDelta);
+
+    velocity.current.x += (targetVelX - velocity.current.x) * damp;
+    velocity.current.z += (targetVelZ - velocity.current.z) * damp;
+
+    if (!hasInput && Math.hypot(velocity.current.x, velocity.current.z) < 0.01) {
+      velocity.current.set(0, 0, 0);
+    }
+
+    // Apply continuous swept collision
+    if (useLegacyHall) {
+      cam.position.x += velocity.current.x * safeDelta;
+      cam.position.z += velocity.current.z * safeDelta;
+      cam.position.x = Math.max(boundary.minX, Math.min(boundary.maxX, cam.position.x));
+      cam.position.z = Math.max(boundary.minZ, Math.min(boundary.maxZ, cam.position.z));
+    } else {
+      const curPos = { x: cam.position.x, z: cam.position.z };
+      const reqVel = { x: velocity.current.x, z: velocity.current.z };
+      const col = moveWithCollision(curPos, reqVel, safeDelta);
+
+      cam.position.x = col.position.x;
+      cam.position.z = col.position.z;
+
+      // Preserve tangential sliding velocity so gliding along walls is natural
+      velocity.current.x = col.resolvedVelocity.x;
+      velocity.current.z = col.resolvedVelocity.z;
+    }
+
+    // --- Subtle Walking Head-Bob Effect ---
+    const moveSpeed = Math.hypot(velocity.current.x, velocity.current.z);
+    if (!prefersReducedMotion && moveSpeed > 0.2) {
+      const bobFreq = isSprinting ? 12.0 : 8.5;
+      headBobTimer.current += safeDelta * bobFreq;
+      const bobAmp = isSprinting ? 0.025 : 0.018; // Max 2.5cm vertical displacement
+      const targetBobY = BASE_EYE_HEIGHT + Math.sin(headBobTimer.current) * bobAmp;
+      cam.position.y = THREE.MathUtils.damp(cam.position.y, targetBobY, 12, safeDelta);
+    } else {
+      cam.position.y = THREE.MathUtils.damp(cam.position.y, BASE_EYE_HEIGHT, 8, safeDelta);
+    }
+  });
+
+  return (
+    <DreiPointerLockControls
+      pointerSpeed={mouseSensitivity}
+      minPolarAngle={Math.PI / 2 - (45 * Math.PI) / 180}
+      maxPolarAngle={Math.PI / 2 + (45 * Math.PI) / 180}
+      onLock={() => {
+        isPointerLocked.current = true;
+        onPointerLockChangeRef.current?.(true);
+      }}
+      onUnlock={() => {
+        isPointerLocked.current = false;
+        keys.current.clear();
+        movementState.forward = false;
+        movementState.backward = false;
+        movementState.left = false;
+        movementState.right = false;
+        onPointerLockChangeRef.current?.(false);
+      }}
+    />
+  );
 }

@@ -19,6 +19,7 @@ import { GET as getAdminCommissions } from "../src/app/api/admin/commissions/rou
 import { POST as approveAdminCommission } from "../src/app/api/admin/approve/route.ts";
 import { POST as rejectAdminCommission } from "../src/app/api/admin/reject/route.ts";
 import { POST as runCleanupCron } from "../src/app/api/cron/cleanup-expired/route.ts";
+import nextConfig from "../next.config.ts";
 
 // Set required test environment variables
 process.env.ADMIN_NOTIFICATION_EMAIL = "curator@artfolio.com";
@@ -813,6 +814,47 @@ describe("ARTfolio Phase 2 Security Hardening & Regression Tests", () => {
       assert.strictEqual(res.status, 200);
       const json = await res.json();
       assert.strictEqual(json.success, true);
+    });
+  });
+
+  // ============================================================================
+  // 8. CONTENT SECURITY POLICY & 3D ASSETS INTEGRITY
+  // ============================================================================
+  describe("Content Security Policy & 3D Assets Integrity", () => {
+    test("enforces strict CSP with Drei HDRI origins allowed in connect-src", async () => {
+      const headersConfig = await nextConfig.headers!();
+      const catchAll = headersConfig.find((h) => h.source === "/(.*)");
+      assert.ok(catchAll, "Catch-all security header block must exist");
+
+      const csp = catchAll.headers.find((h) => h.key === "Content-Security-Policy")?.value;
+      assert.ok(csp, "Content-Security-Policy header must be configured");
+
+      // Verify connect-src contains required Drei HDRI origins
+      const connectSrcMatch = csp.match(/connect-src\s+([^;]+);/);
+      assert.ok(connectSrcMatch, "connect-src directive must exist in CSP");
+      const connectSrc = connectSrcMatch[1];
+
+      assert.ok(
+        connectSrc.includes("https://raw.githack.com"),
+        "connect-src must allow https://raw.githack.com for Drei HDR loading"
+      );
+      assert.ok(
+        connectSrc.includes("https://raw.githubusercontent.com"),
+        "connect-src must allow https://raw.githubusercontent.com for Drei HDR 301 redirects"
+      );
+
+      // Verify no bare wildcard or bare scheme leakage
+      const tokens = connectSrc.split(/\s+/);
+      assert.strictEqual(
+        tokens.includes("*") || tokens.includes("https:"),
+        false,
+        "connect-src must not contain bare wildcards (* or https:)"
+      );
+
+      // Verify essential security directives remain strict
+      assert.ok(csp.includes("object-src 'none'"), "object-src 'none' must be enforced");
+      assert.ok(csp.includes("frame-ancestors 'self'"), "frame-ancestors 'self' must be enforced");
+      assert.ok(csp.includes("base-uri 'self'"), "base-uri 'self' must be enforced");
     });
   });
 });
