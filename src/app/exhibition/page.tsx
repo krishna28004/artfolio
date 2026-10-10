@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Loader } from "@react-three/drei";
 import { GalleryScene, GalleryArtwork } from "@/components/exhibition/GalleryScene";
 import { ExhibitionErrorBoundary } from "@/components/exhibition/ExhibitionErrorBoundary";
+import { ArtworkDetailModal } from "@/components/exhibition/ArtworkDetailModal";
 import { movementState, walkToTarget } from "@/components/exhibition/Controls";
 import { Artwork } from "@/features/artwork/data/artworks";
 import { isValid3DPosition } from "@/features/artwork/utils/exhibition-validation";
@@ -20,13 +20,13 @@ function release(dir: "forward" | "backward" | "left" | "right") {
 }
 
 export default function ExhibitionPage() {
-  const router = useRouter();
   const [entered, setEntered] = useState(false);
   const [showWalkHint, setShowWalkHint] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showHUD, setShowHUD] = useState(false);
   const [dbArtworks, setDbArtworks] = useState<GalleryArtwork[] | undefined>(undefined);
   const [focusedArtwork, setFocusedArtwork] = useState<GalleryArtwork | null>(null);
+  const [selectedArtworkModal, setSelectedArtworkModal] = useState<GalleryArtwork | null>(null);
   const [isPointerLocked, setIsPointerLocked] = useState(false);
   const [useLegacyHall] = useState(() => {
     if (typeof window !== "undefined") {
@@ -151,20 +151,28 @@ export default function ExhibitionPage() {
     }
   };
 
-  // Keyboard shortcut: Press 'V' to view focused artwork details
+  // Keyboard shortcut: Press 'E', 'V', or 'Enter' to open artwork inspection modal
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (selectedArtworkModal) return; // Modal manages its own keys (like Escape)
       if (
-        (e.code === "KeyV" || e.key === "v" || e.key === "V") &&
+        (e.code === "KeyE" ||
+          e.code === "KeyV" ||
+          e.key === "e" ||
+          e.key === "E" ||
+          e.key === "v" ||
+          e.key === "V" ||
+          e.code === "Enter") &&
         focusedArtwork &&
         entered
       ) {
-        router.push(`/artwork/${focusedArtwork.id}`);
+        e.preventDefault();
+        setSelectedArtworkModal(focusedArtwork);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [focusedArtwork, entered, router]);
+  }, [focusedArtwork, entered, selectedArtworkModal]);
 
   // Dismiss walk hint on interaction
   useEffect(() => {
@@ -221,6 +229,8 @@ export default function ExhibitionPage() {
         <GalleryScene
           artworks={dbArtworks}
           onFocusArtwork={setFocusedArtwork}
+          onSelectArtwork={setSelectedArtworkModal}
+          isModalOpen={!!selectedArtworkModal}
           useLegacyHall={useLegacyHall}
           prefersReducedMotion={prefersReducedMotion}
           onPointerLockChange={setIsPointerLocked}
@@ -336,36 +346,44 @@ export default function ExhibitionPage() {
           </div>
 
           {/* Focused Artwork Proximity Card */}
-          {focusedArtwork && (
-            <div className="absolute bottom-8 right-8 z-30 max-w-sm p-5 bg-black/75 backdrop-blur-md border border-primary/30 rounded-lg shadow-2xl animate-in fade-in slide-in-from-bottom-3 pointer-events-auto">
+          {focusedArtwork && !selectedArtworkModal && (
+            <div className="absolute bottom-8 right-8 z-30 max-w-sm p-5 bg-black/85 backdrop-blur-md border border-primary/40 rounded-xl shadow-2xl animate-in fade-in slide-in-from-bottom-3 pointer-events-auto">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <span className="text-[9px] uppercase tracking-[0.25em] text-primary/80 block mb-1">
-                    Inspecting Artwork
+                  <span className="text-[9px] uppercase tracking-[0.25em] text-primary font-semibold block mb-1">
+                    Artwork in Focus
                   </span>
                   <h3 className="font-serif text-white text-base font-normal tracking-wide">
-                    {focusedArtwork.title || "Fine Art Sketch"}
+                    {focusedArtwork.title || "Fine Art Piece"}
                   </h3>
-                  <p className="font-sans text-[11px] text-white/60 mt-0.5">
+                  <p className="font-sans text-[11px] text-white/70 mt-0.5">
                     {focusedArtwork.artist || "Krishna Kumar"}
                     {focusedArtwork.year ? ` · ${focusedArtwork.year}` : ""}
                   </p>
-                  <p className="font-sans text-[10px] text-white/40 mt-1">
+                  <p className="font-sans text-[10px] text-white/50 mt-1">
                     {focusedArtwork.medium || "Pencil on Paper"}
                     {focusedArtwork.dimensions ? ` · ${focusedArtwork.dimensions}` : ""}
                   </p>
                 </div>
               </div>
-              <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between">
-                <Link
-                  href={`/artwork/${focusedArtwork.id}`}
-                  className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-primary hover:text-white transition-colors"
+              <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between gap-3">
+                <button
+                  onClick={() => setSelectedArtworkModal(focusedArtwork)}
+                  className="px-3.5 py-1.5 bg-primary text-[#1a0f00] font-sans text-[10px] uppercase tracking-widest font-bold rounded hover:brightness-110 active:scale-95 transition-all shadow-[0_0_12px_rgba(242,202,80,0.2)] focus:ring-1 focus:ring-primary focus:outline-none"
                 >
-                  View Details &rarr;
-                </Link>
-                <span className="font-mono text-[9px] text-white/40 border border-white/10 px-1.5 py-0.5 rounded">
-                  Press [V]
-                </span>
+                  Inspect Artwork
+                </button>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[9px] text-white/50 border border-white/15 px-1.5 py-0.5 rounded">
+                    [E]
+                  </span>
+                  <Link
+                    href={`/artwork/${focusedArtwork.id}`}
+                    className="text-[10px] uppercase tracking-widest text-white/60 hover:text-white transition-colors ml-1"
+                  >
+                    Dossier &rarr;
+                  </Link>
+                </div>
               </div>
             </div>
           )}
@@ -518,6 +536,14 @@ export default function ExhibitionPage() {
           </div>
         </div>
       )}
+
+      {/* ========== ARTWORK DETAIL MODAL (Phase 3) ========== */}
+      <ArtworkDetailModal
+        artwork={selectedArtworkModal}
+        isOpen={!!selectedArtworkModal}
+        onClose={() => setSelectedArtworkModal(null)}
+        prefersReducedMotion={prefersReducedMotion}
+      />
     </div>
   );
 }

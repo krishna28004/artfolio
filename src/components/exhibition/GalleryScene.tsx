@@ -18,6 +18,7 @@ import { ArtworkFrame } from "./ArtworkFrame";
 import { Plant, Bench, PersonSilhouette } from "./Props";
 import { MuseumShell } from "./museum/MuseumShell";
 import { clampToWalkableBounds, VISITOR_BOUNDS } from "@/features/artwork/utils/exhibition-validation";
+import { artworks as staticArtworks } from "@/features/artwork/data/artworks";
 
 function WebGLCleanup() {
   const { gl } = useThree();
@@ -35,8 +36,11 @@ export interface GalleryArtwork {
   title?: string;
   artist?: string;
   year?: number;
+  description?: string;
   medium?: string;
   dimensions?: string;
+  price?: number;
+  isAvailable?: boolean;
   url: string;
   position: [number, number, number];
   rotation?: [number, number, number];
@@ -348,6 +352,8 @@ function WalkableFloor() {
 export interface GallerySceneProps {
   artworks?: GalleryArtwork[];
   onFocusArtwork?: (art: GalleryArtwork | null) => void;
+  onSelectArtwork?: (art: GalleryArtwork) => void;
+  isModalOpen?: boolean;
   useLegacyHall?: boolean;
   prefersReducedMotion?: boolean;
   onPointerLockChange?: (locked: boolean) => void;
@@ -356,16 +362,31 @@ export interface GallerySceneProps {
 export function GalleryScene({
   artworks,
   onFocusArtwork,
+  onSelectArtwork,
+  isModalOpen = false,
   useLegacyHall = false,
   prefersReducedMotion = false,
   onPointerLockChange,
 }: GallerySceneProps = {}) {
   const [dpr, setDpr] = React.useState(1.5);
 
-  // Map incoming artworks to appropriate gallery slot positions
+  // Map incoming artworks to appropriate gallery slot positions and merge metadata
   const displayArtworks = useMemo(() => {
+    const staticMap = new Map(staticArtworks.map((a) => [a.id, a]));
+
     if (useLegacyHall) {
-      return artworks && artworks.length > 0 ? artworks : ARTWORKS;
+      const baseList = artworks && artworks.length > 0 ? artworks : ARTWORKS;
+      return baseList.map((art) => {
+        const staticData = staticMap.get(art.id);
+        return {
+          ...art,
+          description: art.description || staticData?.description,
+          price: art.price !== undefined ? art.price : staticData?.price,
+          isAvailable: art.isAvailable !== undefined ? art.isAvailable : staticData?.isAvailable,
+          medium: art.medium || staticData?.medium,
+          dimensions: art.dimensions || staticData?.dimensions,
+        };
+      });
     }
 
     // In Museum Shell mode, assign artworks to configured museum slots
@@ -376,14 +397,17 @@ export function GalleryScene({
 
     return baseList.map((art) => {
       const slotMatch = museumPosMap.get(art.id);
-      if (slotMatch) {
-        return {
-          ...art,
-          position: slotMatch.position,
-          rotation: slotMatch.rotation,
-        };
-      }
-      return art;
+      const staticData = staticMap.get(art.id);
+      return {
+        ...art,
+        description: art.description || staticData?.description,
+        price: art.price !== undefined ? art.price : staticData?.price,
+        isAvailable: art.isAvailable !== undefined ? art.isAvailable : staticData?.isAvailable,
+        medium: art.medium || staticData?.medium,
+        dimensions: art.dimensions || staticData?.dimensions,
+        position: slotMatch ? slotMatch.position : art.position,
+        rotation: slotMatch ? slotMatch.rotation : art.rotation,
+      };
     });
   }, [artworks, useLegacyHall]);
 
@@ -430,6 +454,7 @@ export function GalleryScene({
           useLegacyHall={useLegacyHall}
           prefersReducedMotion={prefersReducedMotion}
           onPointerLockChange={onPointerLockChange}
+          isModalOpen={isModalOpen}
         />
         <WalkableFloor />
 
@@ -447,7 +472,10 @@ export function GalleryScene({
         {/* 4. GALLERY ARTWORKS (Placed in configured slots) */}
         {displayArtworks.map((art, i) => (
           <group key={`art-group-${art.id || i}`}>
-            <ArtworkFrame {...art} />
+            <ArtworkFrame
+              {...art}
+              onSelect={onSelectArtwork ? () => onSelectArtwork(art) : undefined}
+            />
           </group>
         ))}
 

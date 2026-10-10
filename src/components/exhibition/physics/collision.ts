@@ -375,3 +375,72 @@ export function isPositionWalkable(
   }
   return true;
 }
+
+/**
+ * Tests whether a 2D line segment between (x1, z1) and (x2, z2) intersects an AABB.
+ * Uses slab method clipping parameter t in [0, maxT].
+ * Default maxT is 0.95 so that a target point sitting on or near an AABB surface
+ * does not get falsely self-occluded by its own mounting wall.
+ */
+export function checkSegmentAABB(
+  x1: number,
+  z1: number,
+  x2: number,
+  z2: number,
+  box: AABB,
+  maxT: number = 0.95
+): boolean {
+  const dx = x2 - x1;
+  const dz = z2 - z1;
+
+  let tMinX: number;
+  let tMaxX: number;
+  if (Math.abs(dx) < 1e-9) {
+    if (x1 < box.minX || x1 > box.maxX) return false;
+    tMinX = -Infinity;
+    tMaxX = Infinity;
+  } else {
+    const invDx = 1 / dx;
+    const t1 = (box.minX - x1) * invDx;
+    const t2 = (box.maxX - x1) * invDx;
+    tMinX = Math.min(t1, t2);
+    tMaxX = Math.max(t1, t2);
+  }
+
+  let tMinZ: number;
+  let tMaxZ: number;
+  if (Math.abs(dz) < 1e-9) {
+    if (z1 < box.minZ || z1 > box.maxZ) return false;
+    tMinZ = -Infinity;
+    tMaxZ = Infinity;
+  } else {
+    const invDz = 1 / dz;
+    const t1 = (box.minZ - z1) * invDz;
+    const t2 = (box.maxZ - z1) * invDz;
+    tMinZ = Math.min(t1, t2);
+    tMaxZ = Math.max(t1, t2);
+  }
+
+  const tEnter = Math.max(tMinX, tMinZ, 0.05);
+  const tExit = Math.min(tMaxX, tMaxZ, maxT);
+
+  return tEnter < tExit - 1e-4;
+}
+
+/**
+ * Checks whether an unobstructed line of sight exists between `from` and `to` on the XZ plane.
+ * Returns false if any solid wall obstacle blocks the line of sight.
+ */
+export function hasLineOfSight(
+  from: Vector2,
+  to: Vector2,
+  obstacles: AABB[] = MUSEUM_SOLID_OBSTACLES,
+  maxT: number = 0.95
+): boolean {
+  for (const box of obstacles) {
+    if (checkSegmentAABB(from.x, from.z, to.x, to.z, box, maxT)) {
+      return false;
+    }
+  }
+  return true;
+}

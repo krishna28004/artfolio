@@ -6,7 +6,7 @@ import { PointerLockControls as DreiPointerLockControls } from "@react-three/dre
 import * as THREE from "three";
 import { ARTWORKS, GalleryArtwork } from "./GalleryScene";
 import { VISITOR_BOUNDS } from "@/features/artwork/utils/exhibition-validation";
-import { moveWithCollision } from "./physics/collision";
+import { moveWithCollision, hasLineOfSight } from "./physics/collision";
 
 export const WALK_SPEED = 3.5;
 export const SPRINT_SPEED = 5.8;
@@ -37,6 +37,7 @@ export interface ControlsProps {
   prefersReducedMotion?: boolean;
   onPointerLockChange?: (locked: boolean) => void;
   mouseSensitivity?: number;
+  isModalOpen?: boolean;
 }
 
 export function Controls({
@@ -48,11 +49,27 @@ export function Controls({
   prefersReducedMotion = false,
   onPointerLockChange,
   mouseSensitivity = 1.0,
+  isModalOpen = false,
 }: ControlsProps) {
   const { camera, gl } = useThree();
   const cameraRef = useRef(camera);
   const onFocusArtworkRef = useRef(onFocusArtwork);
   const onPointerLockChangeRef = useRef(onPointerLockChange);
+  const isModalOpenRef = useRef(isModalOpen);
+
+  useEffect(() => {
+    isModalOpenRef.current = isModalOpen;
+    if (isModalOpen) {
+      movementState.forward = false;
+      movementState.backward = false;
+      movementState.left = false;
+      movementState.right = false;
+      walkToTarget.active = false;
+      if (typeof document !== "undefined" && document.pointerLockElement) {
+        document.exitPointerLock?.();
+      }
+    }
+  }, [isModalOpen]);
 
   useEffect(() => {
     cameraRef.current = camera;
@@ -86,8 +103,9 @@ export function Controls({
     };
 
     const down = (e: KeyboardEvent) => {
-      // Ignore if user is typing in an input or textarea
+      // Ignore if modal is open or user is typing in an input or textarea
       if (
+        isModalOpenRef.current ||
         document.activeElement?.tagName === "INPUT" ||
         document.activeElement?.tagName === "TEXTAREA"
       ) {
@@ -216,6 +234,11 @@ export function Controls({
 
   // Frame update loop: velocity, swept continuous collision, head bob
   useFrame((state, delta) => {
+    if (isModalOpenRef.current) {
+      velocity.current.set(0, 0, 0);
+      return;
+    }
+
     const cam = state.camera;
     const safeDelta = Math.min(delta, 0.05); // Bounded timestep prevents delta spikes
     const k = keys.current;
@@ -236,8 +259,15 @@ export function Controls({
         const dz = art.position[2] - cam.position.z;
         const dist = Math.sqrt(dx * dx + dz * dz);
         if (dist < minDist) {
-          minDist = dist;
-          nearest = art;
+          // Check line-of-sight to prevent targeting artwork behind solid walls
+          const canSee = hasLineOfSight(
+            { x: cam.position.x, z: cam.position.z },
+            { x: art.position[0], z: art.position[2] }
+          );
+          if (canSee) {
+            minDist = dist;
+            nearest = art;
+          }
         }
       }
 

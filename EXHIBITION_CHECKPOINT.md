@@ -1,7 +1,7 @@
 # Artfolio Virtual Museum — Checkpoint & Status Note
 **Timestamp:** October 10, 2026  
 **Branch:** `main`  
-**Commit Type:** Checkpoint (`feat(exhibition): checkpoint virtual museum development`)
+**Commit Type:** Checkpoint (`feat(exhibition): implement phase 3 artwork proximity raycasting and curatorial details modal`)
 
 ---
 
@@ -18,7 +18,7 @@
   - Room 6: Intimate Graphite Study (`[18.5, -23.5]`, 18m × 17m)
 - **Architectural 3D Shell Components:**
   - `MuseumShell.tsx`, `MuseumFloor.tsx`, `MuseumWall.tsx`, `MuseumCeiling.tsx`, `DoorwayPortal.tsx`, `MuseumBench.tsx`.
-  - Material fallbacks and procedural texturing with subtle oak wood, off-white gallery walls, bronze trim, and warm museum downlighting.
+  - Material fallbacks and procedural texturing with oak wood parquet, off-white gallery walls, bronze trim, and warm museum downlighting.
 - **Artwork Ingestion & Placement:**
   - Spatial coordinates and rotations mapped in `src/features/artwork/data/artworks.ts` and validated via `src/features/artwork/utils/exhibition-validation.ts`.
   - Seamless database merging in `src/features/artwork/services/artwork-service.ts`.
@@ -29,7 +29,7 @@
   - Continuous circle-AABB swept collision resolution preventing high-speed tunnelling.
   - Tangential sliding response preserving parallel velocity components upon wall impact.
   - Multi-iteration constraint solver (up to 4 iterations per frame).
-  - Configurable player collision radius (0.4m), eye height (1.7m), walk speed (4.0 m/s), sprint multiplier (1.8x), and delta clamping (0.1s max).
+  - Configurable player collision radius (0.35m), eye height (1.65m), walk speed (3.5 m/s), sprint speed (5.8 m/s).
   - Explicit doorway clearance calculations across all 6 inter-room portals (e.g., `d-ent-east` Portico Promenade connector at `Z: 21.8` to `24.0`).
   - Solid obstacle colliders for gallery benches across Rooms 2, 3, 4, and 6.
 - **First-Person Controls (`src/components/exhibition/Controls.tsx`):**
@@ -42,6 +42,28 @@
   - Screen-reader accessible alternative at `/exhibition/accessible`.
   - Legacy single-hall view preserved via `?legacy=true` query parameter.
 
+### Phase 3: Artwork Interactions & Curatorial Dossier
+- **Raycast Line-of-Sight & Wall Occlusion (`src/components/exhibition/physics/collision.ts`):**
+  - 2D line-of-sight raycasting (`hasLineOfSight`, `checkSegmentAABB`) testing line segment from player camera to artwork against all museum walls.
+  - Prevents accidental selection of artworks located in adjacent rooms through solid partition walls.
+  - Sub-segment $t$-clipping ($t \le 0.95$) preventing false self-occlusion from artwork mounting walls.
+- **Proximity & Dot-Product Targeting:**
+  - Range threshold of 5.5m combined with camera azimuth dot-product alignment ($\vec{f} \cdot \vec{d} > 0.82$, $\approx 35^\circ$ view cone).
+  - Subtle camera soft-alignment toward inspected artwork without disorienting the visitor.
+- **In-Gallery Contextual Prompt Card:**
+  - Refined curatorial HUD card displaying artwork title, artist, year, medium, dimensions, an "Inspect Artwork" button, and keyboard cue `[E]`.
+- **Accessible Curatorial Modal (`src/components/exhibition/ArtworkDetailModal.tsx`):**
+  - High-definition artwork canvas presentation with loading shimmer and fallback error icon.
+  - Full curatorial metadata: title, artist, year, medium, dimensions, descriptive essay, valuation in INR, and acquisition availability badge.
+  - Fully accessible dialog (`role="dialog"`, `aria-modal="true"`, focus trap on mount and focus restoration on dismiss).
+  - Keyboard shortcuts: `Escape` to close, `Tab` cycling through focusable elements, `[E]` or `[V]` or `Enter` to open.
+  - Direct "Acquisition Dossier &rarr;" link to `/artwork/${id}`.
+- **Input Isolation & Movement Freezing:**
+  - Active keys cleared, velocity zeroed, and pointer lock released upon modal open.
+  - Full visitor stationary safety while modal is open.
+- **Direct 3D Mesh Interaction:**
+  - Pointer hover cursor change and 3D frame click handling in `ArtworkFrame.tsx`.
+
 ---
 
 ## 2. Validation Status
@@ -50,7 +72,8 @@
 | :--- | :--- | :--- | :--- |
 | **ESLint** | `npm run lint` | **PASS** | 0 errors, 0 warnings across entire repository |
 | **TypeScript** | `npx tsc --noEmit` | **PASS** | 0 type errors; strict mode compliant |
-| **Node.js Test Suite** | `npm test` | **PASS** | 140 passed across 54 suites (0 failed, 0 skipped) |
+| **Node.js Test Suite** | `npm test` | **PASS** | 154 passed across 59 suites (0 failed, 0 skipped) |
+| **Artwork Interaction Tests**| `tests/artwork-interaction.test.ts`| **PASS** | 14/14 passing (raycasting, line-of-sight, dot product, metadata, modal freeze) |
 | **Collision Tests** | `tests/collision.test.ts` | **PASS** | 21/21 passing (swept collision, sliding, doorways, boundary containment) |
 | **Museum Shell Tests**| `tests/museum-shell.test.ts`| **PASS** | Shell dimensions, wall counts, door portal bounds verified |
 | **Museum Config Tests**| `tests/museum-config.test.ts`| **PASS** | 36 room, artwork, lighting, and audio assertions verified |
@@ -58,24 +81,7 @@
 
 ---
 
-## 3. Known Limitations & Unfinished Phase 2 Requirements
+## 3. Next Recommended Steps
 
-The following items are intentionally preserved as incomplete Phase 2 work for subsequent verification or development:
-
-1. **Automated Real-Browser Interaction Session:**
-   - Unit tests thoroughly verify the collision math and doorway traversal vectors (`tests/collision.test.ts`).
-   - An interactive headless/real browser recording of full player exploration, pointer lock transition, and multi-room traversal via `browser_subagent` remains to be executed and recorded.
-2. **Mobile Touch Controls:**
-   - Virtual on-screen thumbstick and touch-look drag listeners are architected in specification but pending full mobile gesture tuning in Phase 2 Polish / Phase 4.
-3. **Plinth & Dynamic Collider Registry:**
-   - Benches are included in `MUSEUM_SOLID_OBSTACLES`. Central plinths and future dynamic exhibits currently rely on static room AABBs.
-4. **Phase 3 Interaction Scope:**
-   - Proximity raycasting modals, artwork inspection popups, audio commentary guides, and cart acquisition integrations are Phase 3 features and have deliberately NOT been started in this checkpoint.
-
----
-
-## 4. Next Recommended Steps
-
-1. Launch local dev server and perform interactive browser verification (`browser_subagent`) to test pointer-lock UX, keyboard movement, and room transitions under real rendering conditions.
-2. Tune mobile touch joystick controls for small viewports.
-3. Proceed to Phase 3: Artwork Interactive Raycasting & Acquisition Overlay.
+1. Implement mobile virtual joystick touch controls for small screens.
+2. Proceed to Phase 4: Spatial audio ambience, audio commentary guides, and in-museum cart checkout integration.

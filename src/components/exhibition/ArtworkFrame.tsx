@@ -13,6 +13,7 @@ export interface ArtworkFrameProps {
   position: [number, number, number];
   rotation?: [number, number, number];
   scale?: [number, number, number];
+  onSelect?: () => void;
 }
 
 function ArtworkFrameFallback({
@@ -101,6 +102,7 @@ export function ArtworkFrame({
   position,
   rotation = [0, 0, 0],
   scale = [1, 1, 1],
+  onSelect,
 }: ArtworkFrameProps) {
   const { gl } = useThree();
   const maxAnisotropy = useMemo(
@@ -108,8 +110,39 @@ export function ArtworkFrame({
     [gl]
   );
 
+  const handleClick = React.useCallback(
+    (e: { stopPropagation: () => void }) => {
+      e.stopPropagation();
+      onSelect?.();
+    },
+    [onSelect]
+  );
+
+  const handlePointerOver = React.useCallback(
+    (e: { stopPropagation: () => void }) => {
+      if (onSelect) {
+        e.stopPropagation();
+        document.body.style.cursor = "pointer";
+      }
+    },
+    [onSelect]
+  );
+
+  const handlePointerOut = React.useCallback(() => {
+    if (onSelect) {
+      document.body.style.cursor = "auto";
+    }
+  }, [onSelect]);
+
   return (
-    <group position={position} rotation={rotation} scale={scale}>
+    <group
+      position={position}
+      rotation={rotation}
+      scale={scale}
+      onClick={onSelect ? handleClick : undefined}
+      onPointerOver={onSelect ? handlePointerOver : undefined}
+      onPointerOut={onSelect ? handlePointerOut : undefined}
+    >
       <Suspense fallback={<ArtworkFrameFallback />}>
         <ArtworkFrameContent url={url} maxAnisotropy={maxAnisotropy} />
       </Suspense>
