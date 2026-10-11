@@ -88,13 +88,6 @@ export default async function AccessibleExhibitionPage() {
                   >
                     View Details &rarr;
                   </Link>
-                  <Link
-                    href={`/artwork/${art.id}?wallfit=true`}
-                    className="px-6 py-3 border border-outline-variant/40 text-text font-sans uppercase text-[11px] tracking-widest hover:border-primary transition-colors focus:ring-2 focus:ring-primary focus:outline-none"
-                    aria-label={`Simulate ${art.title} on your wall with WallFit`}
-                  >
-                    WallFit Preview
-                  </Link>
                 </div>
               </div>
             </article>

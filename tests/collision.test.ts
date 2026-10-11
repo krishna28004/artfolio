@@ -10,6 +10,66 @@ import {
 import type { Vector2 } from "../src/components/exhibition/physics/collision.ts";
 import { MUSEUM_CONFIG } from "../src/components/exhibition/config/museum.config.ts";
 
+describe("Position-integrity collision regressions", () => {
+  test("wall contact, sliding and retreat continue from the boundary, never spawn", () => {
+    let position = { x: 3, z: 28.8 };
+    for (let i = 0; i < 60; i++) position = moveWithCollision(position, { x: 0, z: 5.8 }, 1 / 60).position;
+    assert.ok(position.z > 29.49 && position.z <= 29.501);
+    assert.ok(Math.hypot(position.x, position.z - 27) > 3.8);
+    const contact = { ...position };
+    for (let i = 0; i < 30; i++) position = moveWithCollision(position, { x: 3, z: 3 }, 1 / 60).position;
+    assert.ok(position.x > contact.x + 1.4);
+    assert.ok(Math.abs(position.z - contact.z) < 1e-7);
+    assert.ok(isPositionWalkable(position, 0.35 - 1e-7));
+    const retreat = moveWithCollision(position, { x: 0, z: -3.5 }, 0.1);
+    assert.ok(Math.abs(retreat.position.z - (position.z - 0.35)) < 1e-8);
+    assert.ok(retreat.position.x === position.x);
+  });
+
+  for (const axis of ["x", "z"] as const) for (const sign of [-1, 1]) {
+    test(`thin ${axis} wall blocks ${sign > 0 ? "positive" : "negative"} motion and allows parallel/away motion`, () => {
+      const box = axis === "x"
+        ? { minX: -0.15, maxX: 0.15, minZ: -10, maxZ: 10 }
+        : { minX: -10, maxX: 10, minZ: -0.15, maxZ: 0.15 };
+      const position = axis === "x" ? { x: -sign, z: 3 } : { x: 3, z: -sign };
+      const velocity = axis === "x" ? { x: sign * 15, z: 0 } : { x: 0, z: sign * 15 };
+      const contact = moveWithCollision(position, velocity, 0.5, [box]);
+      assert.ok(Math.abs(contact.position[axis] + sign * 0.5) < 1e-7);
+      assert.ok(isPositionWalkable(contact.position, 0.35 - 1e-7, [box]));
+      const tangent = axis === "x" ? { x: 0, z: 2 } : { x: 2, z: 0 };
+      const parallel = moveWithCollision(contact.position, tangent, 0.1, [box]);
+      assert.ok(Math.abs(parallel.position[axis] - contact.position[axis]) < 1e-7);
+      const away = moveWithCollision(parallel.position, { x: -velocity.x, z: -velocity.z }, 0.02, [box]);
+      assert.ok(Math.abs(away.position[axis]) > 0.79);
+    });
+  }
+
+  test("initial overlap and near-zero motion recover locally without a spawn fallback", () => {
+    const wall = { minX: 10, maxX: 10.3, minZ: 0, maxZ: 10 };
+    const result = moveWithCollision({ x: 9.9, z: 4 }, { x: 1e-10, z: 0 }, 0.05, [wall]);
+    assert.ok(Math.abs(result.position.x - 9.65) < 1e-7);
+    assert.equal(result.position.z, 4);
+    assert.ok(isPositionWalkable(result.position, 0.35 - 1e-7, [wall]));
+  });
+
+  test("invalid velocities and timing preserve a non-spawn valid position and clear velocity", () => {
+    const position = { x: 4, z: 10 };
+    for (const [velocity, delta] of [
+      [{ x: NaN, z: 2 }, 0.016], [{ x: Infinity, z: 0 }, 0.016],
+      [{ x: 1, z: 1 }, NaN], [{ x: 1, z: 1 }, Infinity],
+      [{ x: Number.MAX_VALUE, z: 0 }, Number.MAX_VALUE],
+      [{ x: 1e300, z: 1e300 }, 0.016],
+    ] as const) {
+      const result = moveWithCollision(position, velocity, delta);
+      assert.deepEqual(result.position, position);
+      assert.deepEqual(result.resolvedVelocity, { x: 0, z: 0 });
+      assert.ok(Object.values(result.position).every(Number.isFinite));
+    }
+    assert.throws(() => moveWithCollision({ x: NaN, z: 10 }, { x: 0, z: 0 }, 0.016), RangeError);
+    assert.equal(isPositionWalkable({ x: Infinity, z: 10 }), false);
+  });
+});
+
 describe("Artfolio Virtual Museum — Phase 2 Physics Collision & Movement Engine Tests", () => {
   const R = DEFAULT_COLLISION_CONFIG.playerRadius; // 0.35m
 

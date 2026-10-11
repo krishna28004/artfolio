@@ -1,46 +1,28 @@
-/**
- * Client-side Cloudinary service with strict server-validated upload capability.
- * Contains ZERO server secrets.
- */
+// Legacy module path retained for existing imports; commission references now use
+// server-validated private Supabase Storage, not public Cloudinary delivery.
+export type PrivateReferenceClaim = { id: string; token: string; name: string; size: number };
 
-/**
- * Uploads an image via the secure server-validated media endpoint.
- * Guarantees that folder, size (10MB max), MIME type, and magic bytes are strictly enforced by the server.
- */
-export async function uploadImageToCloudinarySigned(
-  file: File
-): Promise<{ url: string; publicId: string } | null> {
-  // 1. Client-side preliminary guard
-  if (file.size > 10 * 1024 * 1024) {
-    throw new Error("File exceeds maximum allowable upload size of 10MB.");
+export async function uploadPrivateReference(file: File, onProgress?: (percent: number) => void): Promise<PrivateReferenceClaim> {
+  if (file.size === 0 || file.size > 10 * 1024 * 1024) {
+    throw new Error("File must be between 1 byte and 10 MB.");
   }
-
-  // 2. Submit to server-side validated upload route
-  const formData = new FormData();
-  formData.append("file", file);
-
-  try {
-    const res = await fetch("/api/media/upload", {
-      method: "POST",
-      body: formData,
-    });
-
-    if (!res.ok) {
-      const errorJson = await res.json().catch(() => ({}));
-      throw new Error(errorJson.message || `Upload failed with status ${res.status}`);
-    }
-
-    const json = await res.json();
-    if (!json.success || !json.data) {
-      throw new Error(json.message || "Failed to receive valid upload metadata from server.");
-    }
-
-    return {
-      url: json.data.url,
-      publicId: json.data.publicId,
+  const form = new FormData();
+  form.append("file", file);
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/media/upload");
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100));
     };
-  } catch (error) {
-    console.error("[UPLOAD_SERVICE_ERROR]", error);
-    throw error;
-  }
+    xhr.onerror = () => reject(new Error("Network error while uploading."));
+    xhr.onabort = () => reject(new Error("Upload cancelled."));
+    xhr.onload = () => {
+      let result: { success?: boolean; message?: string; data?: PrivateReferenceClaim };
+      try { result = JSON.parse(xhr.responseText); } catch { result = {}; }
+      if (xhr.status < 200 || xhr.status >= 300 || !result.success || !result.data) {
+        reject(new Error(result.message || "Private upload failed."));
+      } else resolve(result.data);
+    };
+    xhr.send(form);
+  });
 }

@@ -28,6 +28,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: "/admin", label: "Dashboard" },
     { href: "/admin/commissions", label: "Commissions Queue" },
     { href: "/admin/artworks", label: "Artwork Catalog" },
+    { href: "/admin/payments", label: "Payments" },
+    { href: "/admin/analytics", label: "Analytics" },
+    { href: "/admin/audit", label: "Activity" },
+    { href: "/admin/settings", label: "Settings" },
   ];
 
   return (
@@ -43,7 +47,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </span>
             </Link>
 
-            <nav className="hidden md:flex items-center gap-6">
+            <nav className="hidden lg:flex items-center gap-4 flex-wrap">
               {navLinks.map((link) => {
                 const isActive = pathname === link.href;
                 return (
@@ -77,6 +81,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </button>
           </div>
         </div>
+        <nav className="lg:hidden flex gap-4 overflow-x-auto px-6 pb-3" aria-label="Admin sections">
+          {navLinks.map((link) => <Link key={link.href} href={link.href}
+            className={`shrink-0 text-xs uppercase tracking-wider ${pathname === link.href ? "text-primary" : "text-muted"}`}>
+            {link.label}</Link>)}
+        </nav>
       </header>
 
       {/* Main Content Area */}

@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Virtual 3D Exhibition | Artfolio",
   description:
-    "Experience Krishna Kumar's fine art pencil drawings in an immersive, interactive 3D virtual gallery space with WallFit™ spatial preview.",
+    "Experience Krishna Kumar's fine art pencil drawings in an immersive, interactive 3D virtual gallery space.",
   openGraph: {
     title: "Virtual 3D Exhibition | Artfolio",
     description:

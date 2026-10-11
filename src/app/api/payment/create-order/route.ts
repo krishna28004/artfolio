@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     // 1. Authoritative Lookup from DB via Service Role Client
     const { data: commission, error: dbError } = await supabaseAdmin
       .from("commissions")
-      .select("id, price, status, expires_at, razorpay_order_id, checkout_token_hash")
+      .select("id, price, currency, status, expires_at, razorpay_order_id, checkout_token_hash, quote_version, accepted_quote_version")
       .eq("id", commissionId)
       .single();
 
@@ -78,7 +78,7 @@ export async function POST(req: Request) {
     }
 
     // 3. State Machine Checks
-    if (commission.status === "paid" || commission.status === "fulfilled") {
+    if (["paid", "in_progress", "revision_requested", "ready_for_delivery", "delivered", "completed", "fulfilled"].includes(commission.status)) {
       return NextResponse.json(
         { success: false, message: "This commission has already been paid and secured." },
         { status: 400 }
@@ -107,13 +107,25 @@ export async function POST(req: Request) {
           await supabaseAdmin
             .from("commissions")
             .update({ status: "expired" })
-            .eq("id", commissionId);
+            .eq("id", commissionId).in("status", ["approved", "payment_pending"]);
         }
         return NextResponse.json(
           { success: false, message: "This acquisition window has permanently expired (24-hour limit)." },
           { status: 410 }
         );
       }
+    }
+
+    if (commission.status !== "approved" && commission.status !== "payment_pending") {
+      return NextResponse.json({ success: false, message: "Commission is not available for checkout." }, { status: 409 });
+    }
+
+    if (commission.quote_version > 0 && commission.accepted_quote_version !== commission.quote_version) {
+      return NextResponse.json({ success: false, message: "The current quote has not been accepted." }, { status: 409 });
+    }
+
+    if (!commission.expires_at) {
+      return NextResponse.json({ success: false, message: "Commission quote has no valid expiry." }, { status: 409 });
     }
 
     // 5. Financial Integrity Check (Strict positive integer paise)
@@ -124,6 +136,16 @@ export async function POST(req: Request) {
         { success: false, message: "Commission pricing is uninitialized or invalid." },
         { status: 400 }
       );
+    }
+
+
+    // A retry must use the single order already attached to this quote.
+    if (commission.razorpay_order_id) {
+      const existingOrder = await razorpay.orders.fetch(commission.razorpay_order_id);
+      if (existingOrder.amount !== pricePaise || existingOrder.currency !== commission.currency) {
+        return NextResponse.json({ success: false, message: "Stored order does not match the accepted quote." }, { status: 409 });
+      }
+      return NextResponse.json({ success: true, orderId: commission.razorpay_order_id, amount: pricePaise, currency: "INR" });
     }
 
     // 6. Generate Authenticated Razorpay Order
@@ -138,30 +160,21 @@ export async function POST(req: Request) {
       },
     });
 
-    // 7. Insert Audit/Payment record in 'payments' table (payment_id is null until captured)
-    const { error: paymentInsertError } = await supabaseAdmin.from("payments").insert({
-      commission_id: commissionId,
-      razorpay_order_id: order.id,
-      razorpay_payment_id: null,
-      amount: pricePaise,
-      currency: "INR",
-      status: "created",
+    // Ledger row and commission order are attached in one database transaction.
+    const { data: attachedOrderId, error: attachError } = await supabaseAdmin.rpc("attach_commission_order", {
+      p_commission_id: commissionId, p_order_id: order.id, p_amount: pricePaise, p_currency: "INR",
     });
-
-    if (paymentInsertError) {
-      console.error("[PAYMENT_AUDIT_INSERT_ERROR] Failed to record initial payment order:", paymentInsertError);
+    if (attachError || !attachedOrderId) {
+      console.error("[ORDER_ATTACH_ERROR]", attachError);
+      return NextResponse.json({ success: false, message: "Checkout order could not be recorded. Please retry." }, { status: 503 });
     }
-
-    // 8. Record Razorpay Order ID & transition to payment_pending
-    await supabaseAdmin
-      .from("commissions")
-      .update({
-        razorpay_order_id: order.id,
-        status: "payment_pending",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", commissionId)
-      .in("status", ["approved", "payment_pending"]);
+    if (attachedOrderId !== order.id) {
+      const winner = await razorpay.orders.fetch(attachedOrderId);
+      if (winner.amount !== pricePaise || winner.currency !== "INR") {
+        return NextResponse.json({ success: false, message: "Concurrent order mismatch." }, { status: 409 });
+      }
+      return NextResponse.json({ success: true, orderId: attachedOrderId, amount: pricePaise, currency: "INR" });
+    }
 
     return NextResponse.json({
       success: true,

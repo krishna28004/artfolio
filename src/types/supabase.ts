@@ -8,9 +8,18 @@ export type Json =
 
 export type CommissionStatus =
   | "pending"
+  | "under_review"
+  | "clarification_requested"
+  | "quote_sent"
+  | "quote_accepted"
   | "approved"
   | "payment_pending"
   | "paid"
+  | "in_progress"
+  | "revision_requested"
+  | "ready_for_delivery"
+  | "delivered"
+  | "completed"
   | "fulfilled"
   | "rejected"
   | "expired"
@@ -23,9 +32,64 @@ export type PaymentStatus =
   | "failed"
   | "refunded";
 
+type CommissionFileRow = {
+  id: string; commission_id: string | null; kind: "reference" | "deliverable";
+  storage_path: string; file_name: string; content_type: string; size_bytes: number;
+  claim_hash: string | null; created_at: string; delivered_at: string | null; accessed_at: string | null;
+};
+type CommissionEventRow = {
+  id: string; commission_id: string; actor_type: "customer" | "owner" | "system" | "gateway";
+  event_type: string; body: string | null; metadata: Json; created_at: string;
+};
+type PaymentEventRow = {
+  event_id: string; event_type: string; commission_id: string | null; payment_id: string | null;
+  amount: number | null; currency: string | null; state: "received" | "processed" | "ignored" | "failed";
+  error_code: string | null; received_at: string; processed_at: string | null;
+};
+type CommissionRefundRow = {
+  id: string; commission_id: string; razorpay_payment_id: string; razorpay_refund_id: string | null;
+  amount: number; status: "requested" | "approved" | "initiated" | "processed" | "failed";
+  reason: string | null; created_at: string; updated_at: string;
+};
+type NotificationJobRow = {
+  id: string; commission_id: string; dedupe_key: string; recipient: string; template: string;
+  state: "pending" | "sending" | "sent" | "failed"; attempts: number;
+  next_attempt_at: string; last_error: string | null; created_at: string; sent_at: string | null;
+};
+
 export interface Database {
   public: {
     Tables: {
+      notification_jobs: {
+        Row: NotificationJobRow;
+        Insert: Pick<NotificationJobRow, "commission_id" | "dedupe_key" | "recipient" | "template"> & Partial<NotificationJobRow>;
+        Update: Partial<NotificationJobRow>;
+        Relationships: [];
+      };
+      commission_files: {
+        Row: CommissionFileRow;
+        Insert: Pick<CommissionFileRow, "kind" | "storage_path" | "file_name" | "content_type" | "size_bytes"> & Partial<CommissionFileRow>;
+        Update: Partial<CommissionFileRow>;
+        Relationships: [];
+      };
+      commission_events: {
+        Row: CommissionEventRow;
+        Insert: Pick<CommissionEventRow, "commission_id" | "actor_type" | "event_type"> & Partial<CommissionEventRow>;
+        Update: Partial<CommissionEventRow>;
+        Relationships: [];
+      };
+      payment_events: {
+        Row: PaymentEventRow;
+        Insert: Pick<PaymentEventRow, "event_id" | "event_type"> & Partial<PaymentEventRow>;
+        Update: Partial<PaymentEventRow>;
+        Relationships: [];
+      };
+      commission_refunds: {
+        Row: CommissionRefundRow;
+        Insert: Pick<CommissionRefundRow, "commission_id" | "razorpay_payment_id" | "amount" | "status"> & Partial<CommissionRefundRow>;
+        Update: Partial<CommissionRefundRow>;
+        Relationships: [];
+      };
       artworks: {
         Row: {
           id: string;
@@ -104,6 +168,17 @@ export interface Database {
           email: string;
           image_url: string | null;
           public_id: string | null;
+          request_reference: string | null;
+          tracking_token_hash: string | null;
+          tracking_nonce: string | null;
+          tracking_token_rotated_at: string | null;
+          reference_claim_ids: string[];
+          accepted_quote_version: number | null;
+          quote_version: number;
+          quote_scope: string | null;
+          quote_terms: string | null;
+          estimated_delivery_at: string | null;
+          revision_allowance: number;
           size: string;
           budget: string;
           deadline: string | null;
@@ -129,6 +204,17 @@ export interface Database {
           email: string;
           image_url?: string | null;
           public_id?: string | null;
+          request_reference?: string | null;
+          tracking_token_hash?: string | null;
+          tracking_nonce?: string | null;
+          tracking_token_rotated_at?: string | null;
+          reference_claim_ids?: string[];
+          accepted_quote_version?: number | null;
+          quote_version?: number;
+          quote_scope?: string | null;
+          quote_terms?: string | null;
+          estimated_delivery_at?: string | null;
+          revision_allowance?: number;
           size: string;
           budget: string;
           deadline?: string | null;
@@ -154,6 +240,17 @@ export interface Database {
           email?: string;
           image_url?: string | null;
           public_id?: string | null;
+          request_reference?: string | null;
+          tracking_token_hash?: string | null;
+          tracking_nonce?: string | null;
+          tracking_token_rotated_at?: string | null;
+          reference_claim_ids?: string[];
+          accepted_quote_version?: number | null;
+          quote_version?: number;
+          quote_scope?: string | null;
+          quote_terms?: string | null;
+          estimated_delivery_at?: string | null;
+          revision_allowance?: number;
           size?: string;
           budget?: string;
           deadline?: string | null;
@@ -298,7 +395,30 @@ export interface Database {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      commission_business_metrics: { Args: Record<string, never>; Returns: Json };
+      attach_commission_order: {
+        Args: { p_commission_id: string; p_order_id: string; p_amount: number; p_currency: string };
+        Returns: string;
+      };
+      record_commission_capture: {
+        Args: { p_commission_id: string; p_order_id: string; p_payment_id: string;
+          p_amount: number; p_currency: string; p_method?: string | null; p_event_id?: string | null };
+        Returns: string;
+      };
+      record_commission_refund: {
+        Args: { p_event_id: string; p_refund_id: string; p_payment_id: string;
+          p_amount: number; p_processed: boolean };
+        Returns: string;
+      };
+      accept_commission_quote: {
+        Args: { p_commission_id: string; p_quote_version: number;
+          p_checkout_token_hash: string; p_expires_at: string };
+        Returns: string;
+      };
+      attach_commission_references: {
+        Args: { p_commission_id: string; p_claims: Json };
+        Returns: number;
+      };
     };
     Enums: {
       commission_status: CommissionStatus;

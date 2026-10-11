@@ -1,18 +1,10 @@
 "use client";
-/* eslint-disable react-hooks/set-state-in-effect */
 // Refinement pass for professional editorial feel
 import Link from "next/link";
-import { useState, useEffect } from "react";
-import dynamic from "next/dynamic";
+import { useState } from "react";
 import { Eye, Heart, Share2, Check } from "lucide-react";
 import { useFavorites } from "@/features/favorites/hooks/use-favorites";
 import { useViewCount } from "@/features/artwork/hooks/use-view-count";
-
-// Next.js dynamic imperative import explicitly skipping SSR to prevent Canvas initialization fatal crashes
-const WallFitOverlay = dynamic(
-  () => import("@/components/wallfit/WallFitLayout").then((mod) => mod.WallFitLayout),
-  { ssr: false }
-);
 
 interface ArtworkInfoProps {
   id: string;
@@ -22,26 +14,12 @@ interface ArtworkInfoProps {
   medium?: string;
   dimensions?: string;
   description: string;
-  imageUrl?: string;
 }
 
-export function ArtworkInfo({ id, title, artist, year, medium, dimensions, description, imageUrl }: ArtworkInfoProps) {
-  const [simOpen, setSimOpen] = useState(false);
+export function ArtworkInfo({ id, title, artist, year, medium, dimensions, description }: ArtworkInfoProps) {
   const [copied, setCopied] = useState(false);
   const { isFavorite, toggleFavorite } = useFavorites();
   const { views } = useViewCount(id);
-
-  // Read URL params safely inside client component to check for ?wallfit=true
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get("wallfit") === "true") {
-        setSimOpen(true);
-        // Optional: Clean up the URL after opening
-        window.history.replaceState({}, '', window.location.pathname);
-      }
-    }
-  }, []);
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -54,12 +32,8 @@ export function ArtworkInfo({ id, title, artist, year, medium, dimensions, descr
     window.open(`https://wa.me/?text=${text}`, '_blank');
   };
 
-  // High-def default artwork fallback URL for WallFit Simulation when image is unreachable
-  const targetImg = imageUrl || "https://images.unsplash.com/photo-1541961017774-22349e4a1262?q=80&w=1500";
-
   return (
     <>
-      {simOpen && <WallFitOverlay artworkUrl={targetImg} onClose={() => setSimOpen(false)} />}
       <div className="flex flex-col h-full justify-center">
 
         {/* Subtle Popularity Badge (Archival style) */}
@@ -125,15 +99,6 @@ export function ArtworkInfo({ id, title, artist, year, medium, dimensions, descr
 
         {/* Dual CTA Actions */}
         <div className="mt-auto flex flex-col gap-4 max-w-sm">
-          <button
-            onClick={() => setSimOpen(true)}
-            className="inline-flex justify-center items-center gap-3 px-10 py-5 border border-white/10 text-muted uppercase text-[11px] tracking-[0.2em] font-sans font-medium transition-all duration-[600ms] hover:border-white/30 hover:text-white group active:scale-[0.98]"
-          >
-            {/* SVG AI Reticle Icon */}
-            <svg className="transition-transform duration-500 group-hover:rotate-90" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square"><path d="M4 4h16v16H4z" /><path d="M4 14l5-5 4 4 6-6" /></svg>
-            Visualize in Space
-          </button>
-
           <Link
             href={`/commission?ref=${encodeURIComponent(title)}`}
             className="inline-flex justify-center px-10 py-5 bg-transparent border border-primary text-primary uppercase text-[11px] font-sans tracking-[0.2em] font-bold transition-all duration-[600ms] hover:bg-primary hover:text-black active:scale-[0.98]"

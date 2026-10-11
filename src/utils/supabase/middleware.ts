@@ -4,6 +4,9 @@ import { NextResponse, type NextRequest } from 'next/server'
 export async function updateSession(request: NextRequest) {
   // Guard: if env vars are missing, skip session update silently
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    if (request.nextUrl.pathname.startsWith('/admin') && !request.nextUrl.pathname.startsWith('/admin/login')) {
+      return NextResponse.redirect(new URL('/admin/login', request.url));
+    }
     return NextResponse.next({ request });
   }
 
@@ -37,15 +40,11 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   const adminEmail = (
-    process.env.ADMIN_NOTIFICATION_EMAIL ||
-    process.env.ADMIN_EMAIL ||
-    "artist@artfolio.luxury"
+    process.env.ADMIN_EMAIL || ""
   ).toLowerCase().trim();
 
   const isAuthorizedAdmin =
-    Boolean(user) &&
-    (user?.email?.toLowerCase().trim() === adminEmail ||
-      user?.app_metadata?.role === "admin");
+    Boolean(user && adminEmail) && user?.email?.toLowerCase().trim() === adminEmail;
 
   if (
     !isAuthorizedAdmin &&

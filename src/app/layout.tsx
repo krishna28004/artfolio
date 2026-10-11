@@ -16,10 +16,10 @@ const playfair = Playfair_Display({
 
 export const metadata: Metadata = {
   title: "Artfolio | Premium Digital Art Platform",
-  description: "Bespoke digital masterpieces curated for exclusive spatial realities via WallFit™ engine.",
+  description: "Original graphite artworks, an immersive virtual exhibition, and private commissions by Krishna Kumar.",
   openGraph: {
     title: "Artfolio | Premium Digital Artefacts",
-    description: "Curated digital excellence. Preview your acquisition physically before commitment.",
+    description: "Explore original graphite art and request a private commission.",
     type: "website",
   },
 };

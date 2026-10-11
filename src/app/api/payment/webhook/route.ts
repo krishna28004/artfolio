@@ -1,260 +1,124 @@
 import { NextResponse } from "next/server";
+import crypto from "node:crypto";
 import { getSupabaseAdmin } from "@/shared/services/supabase-admin";
+import { getRazorpayClient } from "@/shared/services/razorpay";
 import { computeHmacSha256, timingSafeEqualStr } from "@/shared/utils/crypto";
+import { queueCommissionNotice } from "@/features/commission/server/notifications";
+
+type GatewayEvent = {
+  id?: string; event?: string;
+  payload?: { payment?: { entity?: { id?: string; order_id?: string; amount?: number; currency?: string; status?: string; method?: string } };
+    refund?: { entity?: { id?: string; payment_id?: string; amount?: number; status?: string } } };
+};
 
 export async function POST(req: Request) {
   try {
-    // 1. Raw body required for cryptographic HMAC verification
     const body = await req.text();
-    const signature = req.headers.get("x-razorpay-signature");
-    const eventIdHeader = req.headers.get("x-razorpay-event-id");
-
-    if (!signature) {
-      console.error("[WEBHOOK_AUTH_FATAL] Received inbound webhook missing x-razorpay-signature header.");
-      return NextResponse.json({ success: false, message: "Missing webhook signature header." }, { status: 400 });
-    }
-
+    const signature = req.headers.get("x-razorpay-signature") || "";
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
-    if (!secret) {
-      console.error("[WEBHOOK_CONFIG_FATAL] RAZORPAY_WEBHOOK_SECRET is not configured on the server.");
-      return NextResponse.json({ success: false, message: "Server webhook misconfiguration." }, { status: 500 });
+    if (!secret) return NextResponse.json({ success: false, message: "Webhook unavailable." }, { status: 503 });
+    if (!signature || !timingSafeEqualStr(computeHmacSha256(body, secret), signature)) {
+      return NextResponse.json({ success: false, message: "Invalid webhook signature." }, { status: 403 });
     }
-
-    // 2. Constant-Time Cryptographic Signature Authentication
-    const expectedSignature = computeHmacSha256(body, secret);
-
-    if (!timingSafeEqualStr(expectedSignature, signature)) {
-      console.warn("[WEBHOOK_SECURITY_WARN] Invalid cryptographic webhook signature intercepted.");
-      return NextResponse.json({ success: false, message: "Signature verification failed." }, { status: 400 });
+    const event = JSON.parse(body) as GatewayEvent;
+    const eventType = event.event || "unknown";
+    const eventId = req.headers.get("x-razorpay-event-id") || event.id ||
+      `body_${crypto.createHash("sha256").update(body).digest("hex")}`;
+    const admin = getSupabaseAdmin();
+    const { error: receiptError } = await admin.from("payment_events").insert({
+      event_id: eventId, event_type: eventType, state: "received",
+      payment_id: event.payload?.payment?.entity?.id || event.payload?.refund?.entity?.payment_id || null,
+      amount: event.payload?.payment?.entity?.amount || event.payload?.refund?.entity?.amount || null,
+      currency: event.payload?.payment?.entity?.currency || null,
+    });
+    if (receiptError && receiptError.code !== "23505") {
+      console.error("[WEBHOOK_RECEIPT_ERROR]", receiptError);
+      return NextResponse.json({ success: false, message: "Webhook receipt unavailable." }, { status: 503 });
     }
-
-    const event = JSON.parse(body);
-    const eventId = eventIdHeader || event.id || null;
-    const supabaseAdmin = getSupabaseAdmin();
-
-    // 3. Webhook Event Idempotency Check
-    if (eventId) {
-      const { data: existingEvent } = await supabaseAdmin
-        .from("payments")
-        .select("id")
-        .eq("event_id", eventId)
-        .limit(1)
-        .maybeSingle();
-
-      if (existingEvent) {
-        return NextResponse.json({ success: true, message: "Event already processed idempotently." });
+    if (receiptError?.code === "23505") {
+      const { data: existing } = await admin.from("payment_events").select("state")
+        .eq("event_id", eventId).maybeSingle();
+      if (existing?.state === "processed" || existing?.state === "ignored") {
+        return NextResponse.json({ success: true, message: "Event already processed." });
       }
     }
 
-    // 4. Financial Event: payment.captured
-    if (event.event === "payment.captured") {
-      const paymentEntity = event.payload?.payment?.entity;
-      if (!paymentEntity) {
-        console.error("[WEBHOOK_PAYLOAD_ERROR] Missing payment entity in payment.captured payload.");
-        return NextResponse.json({ success: false, message: "Malformed payment payload." }, { status: 400 });
+    if (eventType === "payment.captured") {
+      const payment = event.payload?.payment?.entity;
+      if (!payment?.id || !payment.order_id || !Number.isInteger(payment.amount) || payment.amount! <= 0 || payment.currency !== "INR") {
+        return NextResponse.json({ success: false, message: "Invalid capture payload." }, { status: 400 });
       }
-
-      const orderId = paymentEntity.order_id;
-      const paymentId = paymentEntity.id;
-      const capturedAmount = paymentEntity.amount; // In paise
-      const currency = paymentEntity.currency;
-      const method = paymentEntity.method || null;
-
-      if (!orderId) {
-        console.warn("[WEBHOOK_WARN] payment.captured event without order_id. Skipping.");
-        return NextResponse.json({ success: true, message: "Unlinked payment skipped." });
+      const { data: commission, error } = await admin.from("commissions")
+        .select("id, price, currency, email, quote_version, accepted_quote_version")
+        .eq("razorpay_order_id", payment.order_id).maybeSingle();
+      if (error || !commission) return NextResponse.json({ success: false, message: "Unknown order; retry later." }, { status: 503 });
+      if (commission.price !== payment.amount || commission.currency !== payment.currency ||
+          (commission.quote_version > 0 && commission.accepted_quote_version !== commission.quote_version)) {
+        return NextResponse.json({ success: false, message: "Capture does not match quote." }, { status: 409 });
       }
-
-      // 5. Authoritative DB Commission Lookup
-      const { data: commission, error: dbError } = await supabaseAdmin
-        .from("commissions")
-        .select("id, status, price, email, name")
-        .eq("razorpay_order_id", orderId)
-        .single();
-
-      if (dbError || !commission) {
-        console.error(`[WEBHOOK_LOOKUP_FAIL] No commission matching Razorpay order ${orderId}:`, dbError);
-        return NextResponse.json({ success: true, message: "Commission record not found for order." });
+      const gateway = getRazorpayClient();
+      const [gatewayOrder, gatewayPayment] = await Promise.all([
+        gateway.orders.fetch(payment.order_id), gateway.payments.fetch(payment.id),
+      ]);
+      if (gatewayOrder.amount !== commission.price || gatewayOrder.currency !== commission.currency ||
+          gatewayPayment.order_id !== payment.order_id || gatewayPayment.status !== "captured" ||
+          gatewayPayment.amount !== commission.price || gatewayPayment.currency !== commission.currency) {
+        return NextResponse.json({ success: false, message: "Gateway capture mismatch." }, { status: 409 });
       }
-
-      // 6. Idempotency Check
-      if (commission.status === "paid" || commission.status === "fulfilled") {
-        return NextResponse.json({ success: true, message: "Payment already processed and recorded." });
+      const { data: captured, error: captureError } = await admin.rpc("record_commission_capture", {
+        p_commission_id: commission.id, p_order_id: payment.order_id, p_payment_id: payment.id,
+        p_amount: commission.price, p_currency: commission.currency,
+        p_method: gatewayPayment.method || null, p_event_id: eventId,
+      });
+      if (captureError || captured !== "captured") {
+        console.error("[WEBHOOK_CAPTURE_ERROR]", captureError);
+        return NextResponse.json({ success: false, message: "Capture persistence failed." }, { status: 503 });
       }
-
-      // 7. Strict Currency & Amount Verification (Exact Paise Match)
-      if (currency !== "INR") {
-        console.error(
-          `[WEBHOOK_CURRENCY_FRAUD] Currency mismatch for commission ${commission.id}. Expected INR, got ${currency}`
-        );
-        return NextResponse.json({ success: false, message: "Invalid payment currency." }, { status: 400 });
-      }
-
-      if (capturedAmount !== commission.price) {
-        console.error(
-          `[WEBHOOK_AMOUNT_FRAUD] Captured amount mismatch for commission ${commission.id}. Expected ${commission.price} paise, got ${capturedAmount} paise`
-        );
-        return NextResponse.json(
-          { success: false, message: "Payment amount does not match approved quote." },
-          { status: 400 }
-        );
-      }
-
-      // 8. Atomic State Transition to 'paid' & Revoke Checkout Token
-      const nowIso = new Date().toISOString();
-      const { error: updateError } = await supabaseAdmin
-        .from("commissions")
-        .update({
-          status: "paid",
-          razorpay_payment_id: paymentId,
-          checkout_token_hash: null, // Revoke checkout token post-payment
-          paid_at: nowIso,
-          updated_at: nowIso,
-        })
-        .eq("id", commission.id)
-        .in("status", ["approved", "payment_pending"]);
-
-      if (updateError) {
-        console.error("[WEBHOOK_UPDATE_FATAL] Failed to update commission status to paid:", updateError);
-        return NextResponse.json({ success: false, message: "Database update failure." }, { status: 500 });
-      }
-
-      // 9. Record/Update in payments table (Idempotent)
-      try {
-        const { data: existingPay } = await supabaseAdmin
-          .from("payments")
-          .select("id")
-          .eq("razorpay_order_id", orderId)
-          .maybeSingle();
-
-        if (existingPay) {
-          await supabaseAdmin
-            .from("payments")
-            .update({
-              razorpay_payment_id: paymentId,
-              amount: capturedAmount,
-              currency: "INR",
-              status: "captured",
-              method,
-              event_id: eventId,
-            })
-            .eq("id", existingPay.id);
-        } else {
-          await supabaseAdmin.from("payments").insert({
-            commission_id: commission.id,
-            razorpay_order_id: orderId,
-            razorpay_payment_id: paymentId,
-            amount: capturedAmount,
-            currency: "INR",
-            status: "captured",
-            method,
-            event_id: eventId,
-          });
-        }
-      } catch (payErr) {
-        console.warn("[WEBHOOK_PAYMENT_INSERT_WARN]", payErr);
-      }
-
-      // 10. Audit Log
-      try {
-        await supabaseAdmin.from("audit_logs").insert({
-          actor: "razorpay_webhook",
-          action: "payment_captured",
-          target_type: "commission",
-          target_id: commission.id,
-          metadata: { orderId, paymentId, amount: capturedAmount, eventId },
-        });
-      } catch (auditErr) {
-        console.warn("[AUDIT_LOG_ERROR] Could not log webhook payment capture:", auditErr);
-      }
-
-      console.log(`[WEBHOOK_PAYMENT_SECURED] Commission ${commission.id} marked as PAID. Payment: ${paymentId}`);
-      return NextResponse.json({ success: true, message: "Payment recorded successfully." });
+      const { data: timeline } = await admin.from("commission_events").select("id")
+        .eq("commission_id", commission.id).eq("event_type", "payment_captured")
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (timeline && commission.email) await queueCommissionNotice(commission.id, timeline.id, commission.email, "customer");
+      return NextResponse.json({ success: true, message: "Capture recorded." });
     }
 
-    // 11. Payment Failed Event Stream
-    if (event.event === "payment.failed") {
-      const paymentEntity = event.payload?.payment?.entity;
-      const orderId = paymentEntity?.order_id;
-      const errReason = paymentEntity?.error_description || "Transaction declined";
-      const errCode = paymentEntity?.error_code || null;
-
-      if (orderId) {
-        const { data: commission } = await supabaseAdmin
-          .from("commissions")
-          .select("id")
-          .eq("razorpay_order_id", orderId)
-          .maybeSingle();
-
-        if (commission) {
-          try {
-            await supabaseAdmin.from("payments").insert({
-              commission_id: commission.id,
-              razorpay_order_id: orderId,
-              razorpay_payment_id: paymentEntity?.id || "unknown",
-              amount: paymentEntity?.amount || 0,
-              currency: paymentEntity?.currency || "INR",
-              status: "failed",
-              error_code: errCode,
-              error_description: errReason,
-              event_id: eventId,
-            });
-          } catch (insertErr) {
-            console.warn("[PAYMENT_FAIL_LOG_WARN]", insertErr);
-          }
-        }
-      }
-
-      return NextResponse.json({ success: true, message: "Failure event received and logged." });
+    if (eventType === "payment.failed") {
+      const payment = event.payload?.payment?.entity;
+      const { data: commission } = payment?.order_id ? await admin.from("commissions")
+        .select("id").eq("razorpay_order_id", payment.order_id).maybeSingle() : { data: null };
+      const { error } = await admin.from("payment_events").update({
+        commission_id: commission?.id || null, state: "processed", processed_at: new Date().toISOString(),
+      }).eq("event_id", eventId);
+      if (error) return NextResponse.json({ success: false, message: "Failure event persistence failed." }, { status: 503 });
+      return NextResponse.json({ success: true, message: "Failed attempt recorded; checkout remains open." });
     }
 
-    // 12. Refund Event Stream (Idempotent update on existing payment record)
-    if (event.event === "refund.created" || event.event === "payment.refunded") {
-      const refundEntity = event.payload?.refund?.entity || event.payload?.payment?.entity;
-      const paymentId = refundEntity?.payment_id || refundEntity?.id;
-      const refundAmount = refundEntity?.amount;
-
-      if (paymentId) {
-        try {
-          const { data: existingPay } = await supabaseAdmin
-            .from("payments")
-            .select("id, commission_id, razorpay_order_id, status")
-            .eq("razorpay_payment_id", paymentId)
-            .limit(1)
-            .maybeSingle();
-
-          if (existingPay) {
-            // Idempotent: If already recorded as refunded, skip duplicate write
-            if (existingPay.status !== "refunded") {
-              await supabaseAdmin
-                .from("payments")
-                .update({
-                  status: "refunded",
-                  event_id: eventId,
-                  error_description: `Refund processed: ${refundAmount ? refundAmount / 100 + " INR" : "Full/Partial"}`,
-                })
-                .eq("id", existingPay.id);
-
-              await supabaseAdmin.from("audit_logs").insert({
-                actor: "razorpay_webhook",
-                action: "refund_recorded",
-                target_type: "commission",
-                target_id: existingPay.commission_id,
-                metadata: { paymentId, refundAmount, eventId },
-              });
-            }
-          }
-        } catch (refundErr) {
-          console.warn("[REFUND_LOG_WARN]", refundErr);
-        }
+    if (eventType === "refund.created" || eventType === "refund.processed") {
+      const refund = event.payload?.refund?.entity;
+      if (!refund?.id || !refund.payment_id || !Number.isInteger(refund.amount) || refund.amount! <= 0) {
+        return NextResponse.json({ success: false, message: "Invalid refund payload." }, { status: 400 });
       }
-
-      return NextResponse.json({ success: true, message: "Refund event processed." });
+      const { data: payment } = await admin.from("payments").select("id, commission_id, amount, status")
+        .eq("razorpay_payment_id", refund.payment_id).maybeSingle();
+      if (!payment) return NextResponse.json({ success: false, message: "Refund payment unavailable; retry later." }, { status: 503 });
+      if (refund.amount! > payment.amount) return NextResponse.json({ success: false, message: "Refund exceeds payment." }, { status: 409 });
+      const processed = eventType === "refund.processed" && refund.status === "processed";
+      const { error: refundError } = await admin.rpc("record_commission_refund", {
+        p_event_id: eventId, p_refund_id: refund.id, p_payment_id: refund.payment_id,
+        p_amount: refund.amount!, p_processed: processed,
+      });
+      if (refundError) {
+        console.error("[REFUND_RECORD_ERROR]", refundError);
+        return NextResponse.json({ success: false, message: "Refund persistence failed; retry later." }, { status: 503 });
+      }
+      return NextResponse.json({ success: true, message: "Refund event recorded." });
     }
 
+    const { error: ignoredError } = await admin.from("payment_events")
+      .update({ state: "ignored", processed_at: new Date().toISOString() }).eq("event_id", eventId);
+    if (ignoredError) return NextResponse.json({ success: false, message: "Webhook event persistence failed." }, { status: 503 });
     return NextResponse.json({ success: true, message: "Event ignored." });
-  } catch (err) {
-    console.error("[WEBHOOK_CRITICAL_FAIL]", err);
-    return NextResponse.json({ success: false, message: "Webhook server error." }, { status: 500 });
+  } catch (error) {
+    console.error("[WEBHOOK_FATAL]", error);
+    return NextResponse.json({ success: false, message: "Webhook temporarily unavailable." }, { status: 503 });
   }
 }

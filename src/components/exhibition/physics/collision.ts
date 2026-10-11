@@ -258,6 +258,20 @@ export function moveWithCollision(
   obstacles: AABB[] = MUSEUM_SOLID_OBSTACLES,
   config: CollisionConfig = DEFAULT_COLLISION_CONFIG
 ): CollisionResult {
+  if (![currentPos.x, currentPos.z].every(Number.isFinite)) {
+    throw new RangeError("Collision requires a finite current position; restore the last valid player pose.");
+  }
+  if (!(config.playerRadius > 0) || !(config.maxSubStepDistance > 0)
+    || ![config.playerRadius, config.maxSubStepDistance, config.maxIterationsPerStep].every(Number.isFinite)
+    || config.maxSubStepDistance > config.playerRadius || config.maxIterationsPerStep < 1) {
+    throw new RangeError("Invalid collision configuration");
+  }
+  if (![velocity.x, velocity.z, deltaTime, velocity.x * deltaTime, velocity.z * deltaTime].every(Number.isFinite)) {
+    return {
+      position: { ...currentPos }, velocity: { x: 0, z: 0 },
+      resolvedVelocity: { x: 0, z: 0 }, collided: false, contactNormals: [],
+    };
+  }
   if (deltaTime <= 0) {
     return {
       position: { ...currentPos },
@@ -272,6 +286,14 @@ export function moveWithCollision(
   const moveX = velocity.x * deltaTime;
   const moveZ = velocity.z * deltaTime;
   const totalDistance = Math.hypot(moveX, moveZ);
+  // Corrupt but finite velocities must not monopolize the animation thread.
+  // Reject unrealistic work instead of enlarging steps (which could tunnel).
+  if (!Number.isFinite(totalDistance) || totalDistance / config.maxSubStepDistance > 100_000) {
+    return {
+      position: { ...currentPos }, velocity: { x: 0, z: 0 },
+      resolvedVelocity: { x: 0, z: 0 }, collided: false, contactNormals: [],
+    };
+  }
 
   // If stationary or practically zero movement, check static clearance
   if (totalDistance < 0.0001) {
@@ -345,6 +367,7 @@ export function moveWithCollision(
     }
 
     pos = candidate;
+    if (currentVel.x === 0 && currentVel.z === 0) break;
   }
 
   return {
@@ -364,6 +387,7 @@ export function isPositionWalkable(
   radius: number = DEFAULT_COLLISION_CONFIG.playerRadius,
   obstacles: AABB[] = MUSEUM_SOLID_OBSTACLES
 ): boolean {
+  if (![pos.x, pos.z].every(Number.isFinite)) return false;
   for (const box of obstacles) {
     const cx = Math.max(box.minX, Math.min(box.maxX, pos.x));
     const cz = Math.max(box.minZ, Math.min(box.maxZ, pos.z));

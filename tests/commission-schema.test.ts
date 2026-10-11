@@ -7,11 +7,10 @@ describe("Commission Schema Validation Tests", () => {
     idempotencyKey: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     name: "Aarav Sharma",
     email: "aarav.sharma@example.com",
-    imageUrl: "https://example.com/reference-art.jpg",
-    publicId: "cloudinary_ref_12345",
+    fileClaims: [{ id: "9d11f124-93c9-4377-8b21-1b1101965f87", token: "a".repeat(32) }],
     size: "36x48 inches",
     budget: "₹50,000 - ₹1,00,000",
-    deadline: "2026-12-31",
+    deadline: "2099-12-31",
     message: "I would like a bespoke oil painting inspired by midnight oceanic textures.",
   };
 
@@ -30,11 +29,11 @@ describe("Commission Schema Validation Tests", () => {
       size: "24x36 inches",
       budget: "₹25,000",
       message: "Minimal custom artwork commission inquiry with enough length.",
-      imageUrl: "",
+      fileClaims: [],
     };
     const parsed = commissionSchema.parse(minimalPayload);
     assert.strictEqual(parsed.name, "Diya Patel");
-    assert.strictEqual(parsed.imageUrl, "");
+    assert.deepStrictEqual(parsed.fileClaims, []);
   });
 
   test("rejects invalid email formats", () => {
@@ -130,10 +129,16 @@ describe("Commission Schema Validation Tests", () => {
     assert.throws(() => commissionSchema.parse(null), /expected object|invalid_type/i);
     assert.throws(() => commissionSchema.parse(12345), /expected object|invalid_type/i);
 
-    // Invalid imageUrl format
+    // Legacy public asset URLs must no longer be accepted.
     assert.throws(
       () => commissionSchema.parse({ ...validCommissionPayload, imageUrl: "not-a-valid-url" }),
-      /Invalid image URL/
+      /Unrecognized key/
     );
+  });
+
+  test("rejects impossible or past deadlines", () => {
+    for (const deadline of ["2020-01-01", "2099-02-30", "tomorrow"]) {
+      assert.throws(() => commissionSchema.parse({ ...validCommissionPayload, deadline }), /valid future deadline/);
+    }
   });
 });

@@ -2,6 +2,11 @@ import Razorpay from "razorpay";
 
 let razorpayInstance: Razorpay | null = null;
 
+/** Inject an isolated gateway stub in route tests. Never call in application code. */
+export function _setRazorpayInstanceForTesting(instance: Razorpay | null) {
+  razorpayInstance = instance;
+}
+
 /**
  * Returns the authenticated Razorpay client instance.
  * Throws a descriptive error if server credentials are not configured.

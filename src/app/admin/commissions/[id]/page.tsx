@@ -28,6 +28,15 @@ interface CommissionDetail {
   admin_notes: string | null;
   expires_at: string | null;
   created_at: string;
+  request_reference: string | null;
+  quote_version: number;
+  quote_scope: string | null;
+  quote_terms: string | null;
+  estimated_delivery_at: string | null;
+  revision_allowance: number;
+  files?: { id: string; kind: string; file_name: string; size_bytes: number }[];
+  events?: { id: string; actor_type: string; event_type: string; body: string | null; created_at: string }[];
+  refunds?: { id: string; amount: number; status: string; reason: string | null }[];
   payments?: PaymentRecord[];
 }
 
@@ -45,6 +54,13 @@ export default function AdminCommissionDetailPage({
   const [adminNotes, setAdminNotes] = useState<string>("");
   const [actionLoading, setActionLoading] = useState(false);
   const [actionFeedback, setActionFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [manualCheckoutUrl, setManualCheckoutUrl] = useState("");
+  const [quoteScope, setQuoteScope] = useState("");
+  const [quoteTerms, setQuoteTerms] = useState("");
+  const [deliveryDate, setDeliveryDate] = useState("");
+  const [revisions, setRevisions] = useState("1");
+  const [studioMessage, setStudioMessage] = useState("");
+  const [deliverable, setDeliverable] = useState<File | null>(null);
 
   useEffect(() => {
     async function loadCommission() {
@@ -60,6 +76,9 @@ export default function AdminCommissionDetailPage({
             if (data.data.admin_notes) {
               setAdminNotes(data.data.admin_notes);
             }
+            setQuoteScope(data.data.quote_scope || "");
+            setQuoteTerms(data.data.quote_terms || "");
+            setRevisions(String(data.data.revision_allowance ?? 1));
           }
         }
       } catch (err) {
@@ -73,6 +92,7 @@ export default function AdminCommissionDetailPage({
   }, [commissionId]);
 
   const handleApprove = async () => {
+    if (!window.confirm("Send this quote and terms to the customer for acceptance?")) return;
     const rupees = parseInt(quoteRupees, 10);
     if (isNaN(rupees) || rupees <= 0) {
       setActionFeedback({ type: "error", message: "Please provide a valid positive honorarium quote in Rupees." });
@@ -83,13 +103,18 @@ export default function AdminCommissionDetailPage({
     setActionFeedback(null);
 
     try {
-      const res = await fetch("/api/admin/approve", {
+      const res = await fetch("/api/admin/commission-action", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          commissionId,
-          priceInRupees: rupees,
-          adminNotes: adminNotes.trim() || undefined,
+          id: commissionId,
+          action: "send_quote",
+          priceRupees: rupees,
+          scope: quoteScope.trim(),
+          terms: quoteTerms.trim(),
+          estimatedDeliveryAt: deliveryDate ? new Date(`${deliveryDate}T12:00:00Z`).toISOString() : undefined,
+          revisionAllowance: Number(revisions),
+          adminNotes: adminNotes.trim(),
         }),
       });
 
@@ -97,9 +122,10 @@ export default function AdminCommissionDetailPage({
       if (!res.ok || !data.success) {
         setActionFeedback({ type: "error", message: data.message || "Approval failed." });
       } else {
+        setManualCheckoutUrl("");
         setActionFeedback({
           type: "success",
-          message: `Approved! 24h checkout token generated. Customer notified via email.`,
+          message: "Quote saved. The customer must accept this version before checkout; email delivery is queued when configured.",
         });
         // Reload record
         const updatedRes = await fetch(`/api/admin/commissions/${commissionId}`);
@@ -114,19 +140,20 @@ export default function AdminCommissionDetailPage({
   };
 
   const handleReject = async () => {
-    const reasonPrompt = prompt("Optional studio reason for declining this inquiry:");
+    const reasonPrompt = prompt("Reason for declining this inquiry (shared with the customer):");
     if (reasonPrompt === null) return; // User cancelled prompt
 
     setActionLoading(true);
     setActionFeedback(null);
 
     try {
-      const res = await fetch("/api/admin/reject", {
+      const res = await fetch("/api/admin/commission-action", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          commissionId,
-          reason: reasonPrompt.trim() || undefined,
+          id: commissionId,
+          action: "reject",
+          body: reasonPrompt.trim(),
         }),
       });
 
@@ -144,6 +171,46 @@ export default function AdminCommissionDetailPage({
     } finally {
       setActionLoading(false);
     }
+  };
+
+  const refreshCommission = async () => {
+    const response = await fetch(`/api/admin/commissions/${commissionId}`, { cache: "no-store" });
+    const result = await response.json();
+    if (response.ok && result.success) setCommission(result.data);
+  };
+
+  const runWorkflowAction = async (action: string) => {
+    if (["deliver", "cancel", "rotate_token"].includes(action) &&
+        !window.confirm(`Confirm ${action.replaceAll("_", " ")} for this commission?`)) return;
+    setActionLoading(true); setActionFeedback(null);
+    try {
+      const response = await fetch("/api/admin/commission-action", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: commissionId, action, body: studioMessage.trim() || undefined }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Action failed.");
+      setActionFeedback({ type: "success", message: result.trackingToken ?
+        `Access token rotated. The customer will receive an updated tracking link when email delivery is configured.` :
+        "Update saved and notification queued." });
+      setStudioMessage(""); await refreshCommission();
+    } catch (cause) {
+      setActionFeedback({ type: "error", message: cause instanceof Error ? cause.message : "Action failed." });
+    } finally { setActionLoading(false); }
+  };
+
+  const uploadFinal = async () => {
+    if (!deliverable) return;
+    setActionLoading(true); setActionFeedback(null);
+    try {
+      const form = new FormData(); form.append("commissionId", commissionId); form.append("file", deliverable);
+      const response = await fetch("/api/admin/commission-deliverable", { method: "POST", body: form });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Upload failed.");
+      setDeliverable(null); setActionFeedback({ type: "success", message: "Private deliverable uploaded. Mark delivery when ready." });
+      await refreshCommission();
+    } catch (cause) { setActionFeedback({ type: "error", message: cause instanceof Error ? cause.message : "Upload failed." }); }
+    finally { setActionLoading(false); }
   };
 
   if (loading) {
@@ -204,6 +271,13 @@ export default function AdminCommissionDetailPage({
           {actionFeedback.message}
         </div>
       )}
+      {manualCheckoutUrl && (
+        <div className="space-y-2">
+          <label htmlFor="manual-checkout-link" className="text-xs text-amber-300">Private checkout link (shown only now)</label>
+          <input id="manual-checkout-link" readOnly value={manualCheckoutUrl} onFocus={(event) => event.currentTarget.select()}
+            className="w-full p-3 bg-surface-lowest text-text border border-amber-500/40 text-xs font-mono" />
+        </div>
+      )}
 
       {/* Main Grid: Details & Reference Photo */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
@@ -248,14 +322,13 @@ export default function AdminCommissionDetailPage({
           </section>
 
           {/* Review & Action Panel */}
-          {commission.status === "pending" && (
+          {["pending", "under_review", "clarification_requested", "quote_sent"].includes(commission.status) && (
             <section className="bg-surface-highest/5 border border-primary/30 p-6 md:p-8 space-y-6">
               <h2 className="font-serif text-xl text-primary font-normal">
                 Curatorial Honorarium Quote
               </h2>
               <p className="font-sans text-muted text-xs">
-                Setting a price moves this inquiry into <span className="text-text font-semibold">approved</span> status,
-                creates a secure 24-hour token-gated link, and sends an official notification email to the collector.
+                Set the complete scope and terms. The customer must explicitly accept this quote before checkout opens.
               </p>
 
               <div className="space-y-4">
@@ -280,7 +353,7 @@ export default function AdminCommissionDetailPage({
 
                 <div>
                   <label htmlFor="adminNotes" className="block text-muted uppercase tracking-widest text-[11px] mb-2">
-                    Curatorial Notes (Optional)
+                    Internal Notes (Optional)
                   </label>
                   <textarea
                     id="adminNotes"
@@ -292,13 +365,24 @@ export default function AdminCommissionDetailPage({
                   />
                 </div>
 
+                <div><label htmlFor="quoteScope" className="block text-muted uppercase tracking-widest text-[11px] mb-2">Deliverables and scope</label>
+                  <textarea id="quoteScope" value={quoteScope} onChange={(event) => setQuoteScope(event.target.value)} rows={3}
+                    className="w-full bg-surface-lowest/60 border border-outline-variant/30 text-text p-3" /></div>
+                <div><label htmlFor="quoteTerms" className="block text-muted uppercase tracking-widest text-[11px] mb-2">Cancellation, revisions, and rights terms</label>
+                  <textarea id="quoteTerms" value={quoteTerms} onChange={(event) => setQuoteTerms(event.target.value)} rows={3}
+                    className="w-full bg-surface-lowest/60 border border-outline-variant/30 text-text p-3" /></div>
+                <div className="grid grid-cols-2 gap-3"><div><label htmlFor="deliveryDate" className="block text-muted text-xs mb-2">Estimated delivery</label>
+                  <input id="deliveryDate" type="date" value={deliveryDate} onChange={(event) => setDeliveryDate(event.target.value)} className="w-full bg-transparent border border-white/20 p-2" /></div>
+                  <div><label htmlFor="revisions" className="block text-muted text-xs mb-2">Included revisions</label>
+                    <input id="revisions" type="number" min="0" max="20" value={revisions} onChange={(event) => setRevisions(event.target.value)} className="w-full bg-transparent border border-white/20 p-2" /></div></div>
+
                 <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-outline-variant/20">
                   <button
                     onClick={handleApprove}
                     disabled={actionLoading}
                     className="flex-1 py-3.5 bg-primary text-black font-sans uppercase text-[11px] font-semibold tracking-[0.2em] hover:bg-white transition-all disabled:opacity-50"
                   >
-                    {actionLoading ? "Processing..." : "Approve & Generate Checkout &rarr;"}
+                    {actionLoading ? "Processing..." : "Send quote for acceptance"}
                   </button>
 
                   <button
@@ -357,6 +441,9 @@ export default function AdminCommissionDetailPage({
         <div className="lg:col-span-5">
           <div className="bg-surface-highest/5 border border-outline-variant/20 p-6 sticky top-24 space-y-4">
             <h3 className="font-serif text-lg text-text font-normal">Reference Subject</h3>
+            {commission.files?.filter((file) => file.kind === "reference").map((file) =>
+              <a key={file.id} href={`/api/commission/file/${file.id}`} target="_blank" rel="noopener noreferrer"
+                className="block text-primary underline underline-offset-4 text-sm break-all">{file.file_name} · private file</a>)}
             {commission.image_url ? (
               <div className="space-y-4">
                 <div className="relative aspect-[3/4] bg-surface-lowest border border-outline-variant/30 overflow-hidden flex items-center justify-center">
@@ -379,12 +466,52 @@ export default function AdminCommissionDetailPage({
               </div>
             ) : (
               <div className="aspect-[3/4] bg-surface-lowest/40 border border-dashed border-outline-variant/30 flex items-center justify-center p-6 text-center text-muted font-sans text-xs">
-                No reference photograph provided.
+                {commission.files?.some((file) => file.kind === "reference") ? "Private references listed above." : "No reference photograph provided."}
               </div>
             )}
           </div>
         </div>
       </div>
+
+      <section className="border border-outline-variant/20 p-6 md:p-8 space-y-5">
+        <h2 className="font-serif text-2xl">Studio workflow</h2>
+        <p className="text-xs text-muted">Request {commission.request_reference || commission.id} · Quote version {commission.quote_version || 0}</p>
+        <label htmlFor="studioMessage" className="block text-xs uppercase tracking-widest text-muted">Reply, progress update, or reason</label>
+        <textarea id="studioMessage" value={studioMessage} onChange={(event) => setStudioMessage(event.target.value)} rows={3}
+          className="w-full bg-transparent border border-white/20 p-3" maxLength={2000} />
+        <div className="flex flex-wrap gap-3">
+          {(["reply", ...(commission.status === "paid" ? ["start"] : []),
+            ...(commission.status === "in_progress" ? ["progress", "ready"] : []),
+            ...(commission.status === "revision_requested" ? ["resolve_revision"] : []),
+            ...(commission.status === "ready_for_delivery" ? ["deliver"] : []),
+            ...(["pending", "under_review", "clarification_requested", "quote_sent", "approved", "expired"].includes(commission.status) ? ["cancel"] : []),
+            "rotate_token"]).map((action) =>
+              <button key={action} type="button" disabled={actionLoading} onClick={() => void runWorkflowAction(action)}
+                className="border border-white/25 px-4 py-2 text-xs uppercase tracking-wider hover:border-primary disabled:opacity-50">
+                {action.replaceAll("_", " ")}</button>)}
+        </div>
+        {["in_progress", "revision_requested", "ready_for_delivery", "delivered"].includes(commission.status) &&
+          <div className="border-t border-white/15 pt-5 space-y-3">
+            <label htmlFor="finalFile" className="block text-sm">Private final artwork (JPG, PNG, WebP, PDF · 25 MB max)</label>
+            <input id="finalFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf"
+              onChange={(event) => setDeliverable(event.target.files?.[0] || null)} />
+            <button type="button" disabled={!deliverable || actionLoading} onClick={() => void uploadFinal()}
+              className="block border border-primary px-4 py-2 text-primary disabled:opacity-50">Upload deliverable</button>
+          </div>}
+        {commission.files?.filter((file) => file.kind === "deliverable").map((file) =>
+          <a key={file.id} href={`/api/commission/file/${file.id}`} target="_blank" rel="noopener noreferrer"
+            className="block text-primary underline text-sm">{file.file_name} · private deliverable</a>)}
+      </section>
+
+      <section className="border border-outline-variant/20 p-6 md:p-8 space-y-4">
+        <h2 className="font-serif text-2xl">Activity history</h2>
+        {commission.events?.length ? <ol className="space-y-4">{commission.events.map((event) =>
+          <li key={event.id} className="border-l border-primary/40 pl-4 text-sm">
+            <p className="text-muted text-xs">{new Date(event.created_at).toLocaleString()} · {event.actor_type}</p>
+            <p className="capitalize">{event.event_type.replaceAll("_", " ")}</p>
+            {event.body && <p className="text-muted whitespace-pre-wrap">{event.body}</p>}
+          </li>)}</ol> : <p className="text-muted text-sm">No activity recorded yet.</p>}
+      </section>
     </div>
   );
 }

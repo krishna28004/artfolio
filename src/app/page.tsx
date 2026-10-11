@@ -1,4 +1,4 @@
-import { Hero } from "@/components/blocks/Hero";
+import { HeroCarousel } from "@/components/blocks/HeroCarousel";
 import { Gallery } from "@/components/blocks/Gallery";
 import { About } from "@/components/blocks/About";
 import { getAllArtworks } from "@/features/artwork/services/artwork-service";
@@ -12,7 +12,7 @@ export default async function Home() {
 
   return (
     <div className="flex-1 flex flex-col">
-      <Hero />
+      <HeroCarousel artworks={artworks} />
       <Gallery artworks={artworks} />
       <About />
     </div>

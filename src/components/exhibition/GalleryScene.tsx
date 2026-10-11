@@ -13,7 +13,7 @@ import * as THREE from "three";
 
 import { Room } from "./Room";
 import { Lights } from "./Lights";
-import { Controls, walkToTarget } from "./Controls";
+import { Controls, walkToTarget, type PlayerPose } from "./Controls";
 import { ArtworkFrame } from "./ArtworkFrame";
 import { Plant, Bench, PersonSilhouette } from "./Props";
 import { MuseumShell } from "./museum/MuseumShell";
@@ -411,9 +411,11 @@ export function GalleryScene({
     });
   }, [artworks, useLegacyHall]);
 
-  const initialSpawn: [number, number, number] = useLegacyHall
+  const playerPoseRef = React.useRef<PlayerPose | null>(null);
+  const initialSpawn = useMemo<[number, number, number]>(() => useLegacyHall
     ? [0, 1.6, 18]
-    : [0, 1.65, 27];
+    : [0, 1.65, 27], [useLegacyHall]);
+  const cameraOptions = useMemo(() => ({ position: initialSpawn, fov: 60 }), [initialSpawn]);
 
   const movementBoundary = useLegacyHall
     ? VISITOR_BOUNDS
@@ -422,7 +424,7 @@ export function GalleryScene({
   return (
     <Canvas
       shadows
-      camera={{ position: initialSpawn, fov: 60 }}
+      camera={cameraOptions}
       dpr={dpr}
       gl={{ antialias: true, powerPreference: "high-performance", stencil: false }}
       className="w-full h-full bg-[#080808]"
@@ -432,6 +434,17 @@ export function GalleryScene({
         onDecline={() => setDpr(0.75)}
       />
       <WebGLCleanup />
+      <Controls
+        artworks={displayArtworks}
+        onFocusArtwork={onFocusArtwork}
+        initialPosition={initialSpawn}
+        playerPoseRef={playerPoseRef}
+        boundary={movementBoundary}
+        useLegacyHall={useLegacyHall}
+        prefersReducedMotion={prefersReducedMotion}
+        onPointerLockChange={onPointerLockChange}
+        isModalOpen={isModalOpen}
+      />
       <Suspense fallback={null}>
         <Environment preset="city" />
 
@@ -446,16 +459,6 @@ export function GalleryScene({
         )}
 
         {/* 2. CONTROLS & CAMERA */}
-        <Controls
-          artworks={displayArtworks}
-          onFocusArtwork={onFocusArtwork}
-          initialPosition={initialSpawn}
-          boundary={movementBoundary}
-          useLegacyHall={useLegacyHall}
-          prefersReducedMotion={prefersReducedMotion}
-          onPointerLockChange={onPointerLockChange}
-          isModalOpen={isModalOpen}
-        />
         <WalkableFloor />
 
         {/* 3. OPTIMIZED FLOOR SHADOWS */}

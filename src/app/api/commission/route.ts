@@ -1,104 +1,90 @@
 import { NextResponse } from "next/server";
+import crypto from "node:crypto";
 import { commissionSchema } from "@/features/commission/schema/commission-schema";
 import { supabaseAdmin } from "@/shared/services/supabase-admin";
-import { deleteImageFromCloudinary } from "@/shared/services/cloudinary-server";
-import { Resend } from "resend";
 import { checkDistributedRateLimit, getClientIp } from "@/shared/utils/rate-limit";
+import { makeTrackingToken } from "@/features/commission/server/tracking-token";
+import { queueCommissionNotice, deliverPendingNotifications } from "@/features/commission/server/notifications";
+
+function sha256(value: string): string {
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+async function attachReferences(id: string, claims: { id: string; token: string }[]) {
+  if (!claims.length) return true;
+  const { error } = await supabaseAdmin.rpc("attach_commission_references", {
+    p_commission_id: id,
+    p_claims: claims.map((claim) => ({ id: claim.id, hash: sha256(claim.token) })),
+  });
+  if (error) console.error("[REFERENCE_ATTACH_ERROR]", error);
+  return !error;
+}
 
 export async function POST(req: Request) {
   try {
-    const clientIp = getClientIp(req);
-
-    // 1. IP Rate Limiting (Distributed Upstash Redis + Bounded Memory Fallback)
-    const rateCheck = await checkDistributedRateLimit(`commission_${clientIp}`, 5, 15 * 60 * 1000);
-    if (!rateCheck.success) {
-      console.warn(`[SPAM_PROTECTION] Rate limit reached for IP: ${clientIp}`);
-      return NextResponse.json(
-        { success: false, message: "Too many commission inquiries. Please wait a few minutes before submitting again." },
-        { status: 429 }
-      );
+    const limit = await checkDistributedRateLimit(`commission_${getClientIp(req)}`, 5, 15 * 60 * 1000);
+    if (!limit.success) {
+      return NextResponse.json({ success: false, message: "Too many inquiries. Please try again later." }, { status: 429 });
     }
-
-    const body = await req.json();
-
-    // 2. Strict Server Zod Validation
-    const validData = commissionSchema.parse(body);
-
-    // 3. Database Layer — using Service Role client to bypass RLS for server-side insert
-    const { error: dbError } = await supabaseAdmin.from("commissions").insert([
-      {
-        idempotency_key: validData.idempotencyKey,
-        name: validData.name,
-        email: validData.email,
-        image_url: validData.imageUrl || null,
-        size: validData.size,
-        budget: validData.budget,
-        deadline: validData.deadline || null,
-        message: validData.message,
-        status: "pending",
-      },
-    ]);
-
-    if (dbError) {
-      // Postgres Unique Violation (IDEMPOTENCY CATCH: code 23505)
-      if (dbError.code === "23505") {
-        console.info(`[IDEMPOTENT_SUBMISSION] Duplicate request ignored: ${validData.idempotencyKey}`);
-        return NextResponse.json({
-          success: true,
-          message: "Request previously received and securely stored.",
-        });
-      }
-
-      console.error("[DB_FATAL] Supabase insert failed for commission inquiry:", dbError);
-
-      // Orphan Cloudinary cleanup if DB insert fails
-      if (validData.publicId) {
-        try {
-          await deleteImageFromCloudinary(validData.publicId);
-        } catch (cleanupErr) {
-          console.error("[CDN_CLEANUP_ERROR] Failed to purge orphan image:", cleanupErr);
-        }
-      }
-
-      return NextResponse.json(
-        { success: false, message: "We could not save your request. Please try again shortly." },
-        { status: 500 }
-      );
+    const parsed = commissionSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      return NextResponse.json({ success: false, message: "Invalid request details.", errors: parsed.error.flatten().fieldErrors }, { status: 400 });
     }
-
-    // 4. Secure Async Email Notification (Resilient: failure does NOT roll back DB)
-    if (process.env.RESEND_API_KEY) {
-      try {
-        const resend = new Resend(process.env.RESEND_API_KEY);
-        const fromEmail = process.env.RESEND_FROM_EMAIL || "notifications@artfolio.com";
-        const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL || "admin@artfolio.com";
-
-        await resend.emails.send({
-          from: fromEmail,
-          to: adminEmail,
-          subject: `New Commission Request — ${validData.name}`,
-          text: `A new commission has been submitted by ${validData.name} (${validData.email}).\n\nScale: ${validData.size}\nBudget: ${validData.budget}\nDeadline: ${validData.deadline || "None specified"}\n\nMessage:\n${validData.message}\n\nReference Image: ${validData.imageUrl || "None attached"}`,
-        });
-      } catch (emailErr) {
-        console.error("[EMAIL_NOTIFICATION_FAIL] Resend notification failed (DB write preserved):", emailErr);
-      }
+    const data = parsed.data;
+    const claimIds = data.fileClaims.map((claim) => claim.id);
+    if (new Set(claimIds).size !== claimIds.length) {
+      return NextResponse.json({ success: false, message: "Duplicate reference file." }, { status: 400 });
     }
-
-    return NextResponse.json({
-      success: true,
-      message: "Commission inquiry received successfully.",
+    const id = crypto.randomUUID();
+    const reference = `AF-${id.replace(/-/g, "").slice(0, 12).toUpperCase()}`;
+    const token = makeTrackingToken(data.idempotencyKey);
+    const tokenHash = sha256(token);
+    const { error } = await supabaseAdmin.from("commissions").insert({
+      id, idempotency_key: data.idempotencyKey, name: data.name, email: data.email,
+      image_url: null, public_id: null, size: data.size, budget: data.budget,
+      deadline: data.deadline || null, message: data.message, status: "pending",
+      request_reference: reference, tracking_token_hash: tokenHash, reference_claim_ids: claimIds,
+      tracking_nonce: data.idempotencyKey,
     });
-  } catch (error: unknown) {
-    if (error && typeof error === "object" && "name" in error && error.name === "ZodError") {
-      return NextResponse.json(
-        { success: false, message: "Invalid payload.", errors: (error as Record<string, unknown>).errors },
-        { status: 400 }
-      );
+    if (error) {
+      if (error.code !== "23505") {
+        console.error("[COMMISSION_INSERT_ERROR]", error);
+        return NextResponse.json({ success: false, message: "Could not save your request." }, { status: 503 });
+      }
+      const { data: previous } = await supabaseAdmin.from("commissions")
+        .select("id, name, email, size, budget, deadline, message, request_reference, tracking_token_hash, reference_claim_ids")
+        .eq("idempotency_key", data.idempotencyKey).maybeSingle();
+      if (!previous || previous.name !== data.name || previous.email !== data.email ||
+          previous.size !== data.size || previous.budget !== data.budget ||
+          previous.deadline !== (data.deadline || null) || previous.message !== data.message ||
+          JSON.stringify(previous.reference_claim_ids || []) !== JSON.stringify(claimIds)) {
+        return NextResponse.json({ success: false, message: "Request key was already used for different details." }, { status: 409 });
+      }
+      if (!(await attachReferences(previous.id, data.fileClaims))) {
+        return NextResponse.json({ success: false, message: "Could not attach reference files. Please retry." }, { status: 503 });
+      }
+      return NextResponse.json({ success: true, id: previous.id, reference: previous.request_reference,
+        trackingToken: previous.tracking_token_hash === tokenHash ? token : undefined,
+        message: "Request previously received." });
     }
+    if (!(await attachReferences(id, data.fileClaims))) {
+      return NextResponse.json({ success: false, message: "Request saved, but references could not be attached. Please retry." }, { status: 503 });
+    }
+    const { data: event, error: eventError } = await supabaseAdmin.from("commission_events").insert({
+      commission_id: id, actor_type: "customer", event_type: "request_received",
+      metadata: { reference },
+    }).select("id").single();
+    if (eventError) console.error("[COMMISSION_EVENT_ERROR]", eventError);
+    if (event) {
+      await queueCommissionNotice(id, event.id, data.email, "customer");
+      const ownerEmail = process.env.ADMIN_NOTIFICATION_EMAIL || process.env.ADMIN_EMAIL;
+      if (ownerEmail) await queueCommissionNotice(id, event.id, ownerEmail, "owner");
+      if (process.env.RESEND_API_KEY) await deliverPendingNotifications(2).catch((cause) => console.error("[NOTIFICATION_DELIVERY_ERROR]", cause));
+    }
+    return NextResponse.json({ success: true, id, reference, trackingToken: token,
+      message: "Commission inquiry received successfully." });
+  } catch (error) {
     console.error("[COMMISSION_ROUTE_FATAL]", error);
-    return NextResponse.json(
-      { success: false, message: "Server encountered an unexpected error." },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message: "Server encountered an unexpected error." }, { status: 500 });
   }
 }

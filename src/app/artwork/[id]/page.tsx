@@ -88,12 +88,6 @@ export default async function ArtworkPage(props: PageProps) {
             <span>Return to Exhibition</span>
           </Link>
 
-          <Link
-            href={`/artwork/${artwork.id}?wallfit=true`}
-            className="text-[11px] font-sans text-primary tracking-[0.2em] uppercase border-b border-primary pb-1 hover:text-white hover:border-white transition-colors self-start sm:self-auto duration-[600ms] ease-editorial"
-          >
-            Try WallFit&trade; Preview
-          </Link>
         </div>
 
         {/* The Exhibition Layout (Asymmetrical) */}
@@ -113,7 +107,6 @@ export default async function ArtworkPage(props: PageProps) {
               medium={artwork.medium}
               dimensions={artwork.dimensions}
               description={artwork.description}
-              imageUrl={artwork.imageUrl}
             />
           </div>
         </div>

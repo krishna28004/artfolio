@@ -2,7 +2,6 @@
 /* eslint-disable react-hooks/immutability */
 import { useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { PointerLockControls } from "@react-three/drei";
 import * as THREE from "three";
 
 const SPEED = 5; // units per second
@@ -53,5 +52,5 @@ export function FirstPersonController() {
         camera.position.y = 1.7; // always stay at eye level
     });
 
-    return <PointerLockControls />;
+    return null;
 }

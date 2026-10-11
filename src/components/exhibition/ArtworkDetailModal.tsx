@@ -121,23 +121,23 @@ export function ArtworkDetailModal({
       {/* Modal Dialog Card */}
       <div
         ref={modalRef}
-        className={`relative z-10 w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-[#0d0d0e] border border-white/15 rounded-2xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] flex flex-col md:flex-row text-white ${
+        className={`relative z-10 w-full max-w-4xl max-h-[90vh] overflow-y-auto overscroll-contain bg-[#0d0d0e] border border-white/15 rounded-2xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] flex flex-col md:flex-row text-white ${
           prefersReducedMotion
             ? ""
             : "animate-in fade-in zoom-in-95 duration-200"
         }`}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Close Button Top-Right */}
+        {/* Close Button Top-Right (44px touch target) */}
         <button
           ref={closeButtonRef}
           onClick={onClose}
           aria-label="Close artwork details"
-          className="absolute top-4 right-4 z-20 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white/80 hover:text-white border border-white/10 focus:ring-2 focus:ring-primary focus:outline-none"
+          className="absolute top-3.5 right-3.5 z-20 w-11 h-11 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white/80 hover:text-white border border-white/10 focus:ring-2 focus:ring-primary focus:outline-none"
         >
           <svg
-            width="18"
-            height="18"
+            width="20"
+            height="20"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -286,13 +286,13 @@ export function ArtworkDetailModal({
             <div className="flex flex-col sm:flex-row gap-3">
               <Link
                 href={`/artwork/${artwork.id}`}
-                className="flex-1 py-3 px-5 bg-primary text-[#1a0f00] font-sans font-bold text-xs uppercase tracking-widest text-center rounded-lg hover:brightness-110 active:scale-95 transition-all shadow-[0_0_20px_rgba(242,202,80,0.2)] focus:ring-2 focus:ring-primary focus:outline-none"
+                className="flex-1 py-3 px-5 bg-primary text-[#1a0f00] font-sans font-bold text-xs uppercase tracking-widest text-center rounded-lg hover:brightness-110 active:scale-95 transition-all shadow-[0_0_20px_rgba(242,202,80,0.2)] focus:ring-2 focus:ring-primary focus:outline-none min-h-[44px] flex items-center justify-center"
               >
                 Acquisition Dossier &rarr;
               </Link>
               <button
                 onClick={onClose}
-                className="py-3 px-5 bg-white/5 text-white/80 font-sans text-xs uppercase tracking-widest text-center rounded-lg hover:bg-white/10 active:scale-95 transition-all border border-white/10 focus:ring-2 focus:ring-primary focus:outline-none"
+                className="py-3 px-5 bg-white/5 text-white/80 font-sans text-xs uppercase tracking-widest text-center rounded-lg hover:bg-white/10 active:scale-95 transition-all border border-white/10 focus:ring-2 focus:ring-primary focus:outline-none min-h-[44px] flex items-center justify-center"
               >
                 Return to Gallery [Esc]
               </button>

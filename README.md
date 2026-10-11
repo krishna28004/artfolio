@@ -5,7 +5,7 @@
 </p>
 
 ## 📖 Project Overview
-A premium, interactive artist portfolio built with Next.js 16 and Three.js. It bridges the gap between digital portfolios and physical galleries by offering a virtual 3D exhibition and real-time WallFit previews. Designed for artists who want to showcase their work in a highly immersive and professional environment.
+A single-artist portfolio built with Next.js 16 and Three.js, with a virtual 3D exhibition and private commission requests.
 
 ## ✨ Features
 
@@ -15,13 +15,6 @@ Explore artwork in a fully rendered Three.js/React Three Fiber gallery.
 * **First-Person Controls**: Navigate the space as if you were walking in a physical gallery.
 <p align="center">
   <img src="docs/screenshots/exhibition.png" alt="Virtual Exhibition">
-</p>
-
-### 🖼️ WallFit Preview
-Upload a photo of your room to visualize how artwork scales and fits into your real-world space.
-* **AR-Like Experience**: Contextualizes dimensions and presence of the physical piece.
-<p align="center">
-  <img src="docs/screenshots/wallfit.png" alt="WallFit Preview">
 </p>
 
 ### 💳 Commission System & Secure Checkout

@@ -78,3 +78,69 @@
     color: white;
   }
 }
+
+/* Homepage feature dock and artist portrait. */
+.home-feature-dock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: max-content;
+  max-width: 100%;
+  padding: 6px;
+  border: 1px solid rgb(229 224 216 / 0.16);
+  border-radius: 999px;
+  background: rgb(31 30 29 / 0.72);
+  box-shadow: 0 14px 38px rgb(0 0 0 / 0.24);
+  backdrop-filter: blur(16px);
+}
+.home-feature-item {
+  min-height: 48px;
+  border-radius: 999px;
+  transform: scale(var(--dock-scale, 1));
+  transition: transform 300ms cubic-bezier(0.22, 1.12, 0.36, 1), color 220ms ease, background-color 220ms ease;
+}
+.home-feature-item:hover,
+.home-feature-item:focus-visible,
+.home-feature-item[aria-current="location"] { background: rgb(229 224 216 / 0.08); }
+.home-feature-item[aria-current="location"] { color: var(--accent); }
+.home-feature-item:hover .home-feature-icon,
+.home-feature-item:focus-visible .home-feature-icon { transform: translateY(-1px); }
+.home-feature-label {
+  opacity: 0.82;
+  transition: opacity 180ms ease, transform 220ms ease, color 180ms ease;
+}
+.home-feature-item:hover .home-feature-label,
+.home-feature-item:focus-visible .home-feature-label { opacity: 1; transform: translateY(-1px); }
+.artist-portrait img { animation: artist-portrait-reveal 850ms cubic-bezier(0.2, 0.75, 0.25, 1) both; }
+@keyframes artist-portrait-reveal {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 767px) {
+  .home-feature-dock {
+    width: 100%;
+    gap: 0;
+    padding: 4px;
+  }
+  .home-feature-item {
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: center;
+    gap: 5px;
+    padding: 9px 4px;
+    transform: none !important;
+  }
+  .home-feature-label {
+    font-size: 8px;
+    letter-spacing: 0.04em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-feature-item, .home-feature-icon, .home-feature-label { transition-duration: 0.01ms !important; }
+  .home-feature-item { transform: none !important; }
+  .artist-portrait img { animation: none !important; }
+  .animate-reveal { animation: none; opacity: 1; }
+}

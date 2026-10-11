@@ -9,6 +9,7 @@ import { NextRequest } from "next/server";
 // Services & routes to test
 import { verifyAdminAuth } from "../src/features/admin/utils/auth.ts";
 import { _setAdminInstanceForTesting } from "../src/shared/services/supabase-admin.ts";
+import { _setRazorpayInstanceForTesting } from "../src/shared/services/razorpay.ts";
 import { checkRateLimit } from "../src/shared/utils/rate-limit.ts";
 import { computeHmacSha256 } from "../src/shared/utils/crypto.ts";
 import { POST as validateCheckout } from "../src/app/api/checkout/validate/route.ts";
@@ -23,6 +24,7 @@ import nextConfig from "../next.config.ts";
 
 // Set required test environment variables
 process.env.ADMIN_NOTIFICATION_EMAIL = "curator@artfolio.com";
+process.env.ADMIN_EMAIL = "curator@artfolio.com";
 process.env.ADMIN_API_SECRET = "super_secret_admin_key_test_12345";
 process.env.ADMIN_API_KEY = "super_secret_admin_key_test_12345";
 process.env.RAZORPAY_KEY_ID = "rzp_test_12345";
@@ -39,10 +41,68 @@ interface MockDb {
   payments: Record<string, any>;
   artworks: Record<string, any>;
   audit_logs: Record<string, any>;
+  commission_events: Record<string, any>;
+  payment_events: Record<string, any>;
+  commission_refunds: Record<string, any>;
+  notification_jobs: Record<string, any>;
 }
 
 function createMockSupabase(db: MockDb) {
   return {
+    async rpc(name: string, args: Record<string, any>) {
+      if (name === "record_commission_refund") {
+        const payment = Object.values(db.payments).find((row: any) => row.razorpay_payment_id === args.p_payment_id) as any;
+        if (!payment || !["captured", "refunded"].includes(payment.status) ||
+            args.p_amount <= 0 || args.p_amount > payment.amount || !db.payment_events[args.p_event_id]) {
+          return { data: null, error: { message: "invalid_refund" } };
+        }
+        const existing = Object.values(db.commission_refunds).find((row: any) => row.razorpay_refund_id === args.p_refund_id) as any;
+        if (existing && (existing.amount !== args.p_amount || existing.razorpay_payment_id !== args.p_payment_id)) {
+          return { data: null, error: { message: "refund_mismatch" } };
+        }
+        const changed = !existing || (args.p_processed && existing.status !== "processed");
+        if (existing) {
+          if (args.p_processed) existing.status = "processed";
+        } else {
+          const id = crypto.randomUUID();
+          db.commission_refunds[id] = { id, commission_id: payment.commission_id,
+            razorpay_payment_id: args.p_payment_id, razorpay_refund_id: args.p_refund_id,
+            amount: args.p_amount, status: args.p_processed ? "processed" : "initiated" };
+        }
+        const total = Object.values(db.commission_refunds)
+          .filter((row: any) => row.razorpay_payment_id === args.p_payment_id && row.status === "processed")
+          .reduce((sum: number, row: any) => sum + row.amount, 0);
+        if (total > payment.amount) return { data: null, error: { message: "refund_over_capture" } };
+        if (total === payment.amount) payment.status = "refunded";
+        Object.assign(db.payment_events[args.p_event_id], { commission_id: payment.commission_id, state: "processed" });
+        if (changed) {
+          const id = crypto.randomUUID();
+          db.commission_events[id] = { id, commission_id: payment.commission_id,
+            actor_type: "gateway", event_type: args.p_processed ? "refund_processed" : "refund_initiated" };
+        }
+        return { data: total === payment.amount ? "fully_refunded" : "initiated", error: null };
+      }
+      assert.equal(name, "record_commission_capture");
+      const commission = db.commissions[args.p_commission_id];
+      if (!commission || commission.razorpay_order_id !== args.p_order_id ||
+          commission.price !== args.p_amount || commission.currency !== args.p_currency) {
+        return { data: null, error: { message: "capture_mismatch" } };
+      }
+      const payment = Object.values(db.payments).find((row: any) => row.razorpay_order_id === args.p_order_id);
+      if (payment && payment.status !== "refunded") Object.assign(payment, { razorpay_payment_id: args.p_payment_id, status: "captured" });
+      else db.payments[args.p_payment_id] = { id: crypto.randomUUID(), commission_id: args.p_commission_id,
+        razorpay_order_id: args.p_order_id, razorpay_payment_id: args.p_payment_id,
+        amount: args.p_amount, currency: args.p_currency, status: "captured" };
+      if (commission.status !== "paid") {
+        Object.assign(commission, { status: "paid", razorpay_payment_id: args.p_payment_id, checkout_token_hash: null });
+        const eventId = crypto.randomUUID();
+        db.commission_events[eventId] = { id: eventId, commission_id: args.p_commission_id,
+          event_type: "payment_captured", created_at: new Date().toISOString() };
+      }
+      if (args.p_event_id) db.payment_events[args.p_event_id] = {
+        event_id: args.p_event_id, state: "processed", event_type: "payment.captured" };
+      return { data: "captured", error: null };
+    },
     from(table: keyof MockDb) {
       const store = db[table] || {};
       const filters: Array<(row: any) => boolean> = [];
@@ -146,7 +206,10 @@ function createMockSupabase(db: MockDb) {
           return updateBuilder;
         },
         insert(payload: any) {
-          const id = payload.id || crypto.randomUUID();
+          if (table === "payment_events" && store[payload.event_id]) {
+            return { then(resolve: any) { resolve({ data: null, error: { code: "23505" } }); } };
+          }
+          const id = payload.event_id || payload.id || crypto.randomUUID();
           store[id] = { id, ...payload };
           return {
             select() {
@@ -167,7 +230,7 @@ function createMockSupabase(db: MockDb) {
             (row: any) => row[conflictCol] === payload[conflictCol]
           );
           if (match) {
-            Object.assign(match, payload);
+            if (!opts?.ignoreDuplicates) Object.assign(match, payload);
             return {
               select() {
                 return {
@@ -218,12 +281,17 @@ describe("ARTfolio Phase 2 Security Hardening & Regression Tests", () => {
       payments: {},
       artworks: {},
       audit_logs: {},
+      commission_events: {},
+      payment_events: {},
+      commission_refunds: {},
+      notification_jobs: {},
     };
     _setAdminInstanceForTesting(createMockSupabase(mockDb));
   });
 
   afterEach(() => {
     _setAdminInstanceForTesting(null);
+    _setRazorpayInstanceForTesting(null);
   });
 
   // ============================================================================
@@ -254,6 +322,19 @@ describe("ARTfolio Phase 2 Security Hardening & Regression Tests", () => {
       });
       const authResult = await verifyAdminAuth(req);
       assert.strictEqual(authResult.authorized, true);
+    });
+
+    test("notification recipient alone cannot become the owner identity", async () => {
+      const owner = process.env.ADMIN_EMAIL;
+      delete process.env.ADMIN_EMAIL;
+      try {
+        const req = new NextRequest("http://localhost:3000/api/admin/commissions", {
+          headers: { "x-admin-key": process.env.ADMIN_API_KEY! },
+        });
+        assert.equal((await verifyAdminAuth(req)).authorized, false);
+      } finally {
+        process.env.ADMIN_EMAIL = owner;
+      }
     });
 
     test("authorizes machine-to-machine requests with Authorization: Bearer <secret>", async () => {
@@ -294,6 +375,17 @@ describe("ARTfolio Phase 2 Security Hardening & Regression Tests", () => {
       });
       const resReject = await rejectAdminCommission(reqReject);
       assert.strictEqual(resReject.status, 401);
+    });
+
+    test("legacy approval cannot bypass quote acceptance even with owner credentials", async () => {
+      const req = new NextRequest("http://localhost:3000/api/admin/approve", {
+        method: "POST",
+        headers: { "x-admin-key": process.env.ADMIN_API_KEY! },
+        body: JSON.stringify({ commissionId: crypto.randomUUID(), priceInRupees: 5000 }),
+      });
+      const response = await approveAdminCommission(req);
+      assert.strictEqual(response.status, 410);
+      assert.match((await response.json()).message, /complete quote/);
     });
   });
 
@@ -491,11 +583,16 @@ describe("ARTfolio Phase 2 Security Hardening & Regression Tests", () => {
     const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
 
     beforeEach(() => {
+      _setRazorpayInstanceForTesting({ orders: { fetch: async () => ({ id: orderId, amount: 500000, currency: "INR" }) }, payments: { fetch: async () => ({
+        id: paymentId, order_id: orderId, status: "captured", amount: 500000, currency: "INR",
+      }) } } as any);
       mockDb.commissions[commissionId] = {
         id: commissionId,
         title: "Commission for Payment",
         status: "payment_pending",
         price: 500000, // 5000 INR
+        currency: "INR", quote_version: 0, accepted_quote_version: null,
+        email: null,
         razorpay_order_id: orderId,
         checkout_token_hash: tokenHash,
         expires_at: new Date(Date.now() + 3600000).toISOString(),
@@ -513,7 +610,7 @@ describe("ARTfolio Phase 2 Security Hardening & Regression Tests", () => {
         }),
       });
       const res = await verifyPayment(req);
-      assert.strictEqual(res.status, 400);
+      assert.strictEqual(res.status, 403);
       const json = await res.json();
       assert.ok((json.error || json.message).includes("Invalid payment signature"));
     });
@@ -543,11 +640,61 @@ describe("ARTfolio Phase 2 Security Hardening & Regression Tests", () => {
       assert.strictEqual(updatedCommission.razorpay_payment_id, paymentId);
     });
 
+    test("client verify rejects a signed but uncaptured payment", async () => {
+      _setRazorpayInstanceForTesting({ orders: { fetch: async () => ({ id: orderId, amount: 500000, currency: "INR" }) }, payments: { fetch: async () => ({
+        id: paymentId, order_id: orderId, status: "authorized", amount: 500000, currency: "INR",
+      }) } } as any);
+      const res = await verifyPayment(new NextRequest("http://localhost:3000/api/payment/verify", {
+        method: "POST", body: JSON.stringify({ commissionId, razorpay_order_id: orderId,
+          razorpay_payment_id: paymentId,
+          razorpay_signature: computeHmacSha256(`${orderId}|${paymentId}`, process.env.RAZORPAY_SECRET!) }),
+      }));
+      assert.strictEqual(res.status, 409);
+      assert.strictEqual(mockDb.commissions[commissionId].status, "payment_pending");
+    });
+
+    test("client verify rejects captured payment with wrong amount", async () => {
+      _setRazorpayInstanceForTesting({ orders: { fetch: async () => ({ id: orderId, amount: 500000, currency: "INR" }) }, payments: { fetch: async () => ({
+        id: paymentId, order_id: orderId, status: "captured", amount: 100, currency: "INR",
+      }) } } as any);
+      const res = await verifyPayment(new NextRequest("http://localhost:3000/api/payment/verify", {
+        method: "POST", body: JSON.stringify({ commissionId, razorpay_order_id: orderId,
+          razorpay_payment_id: paymentId,
+          razorpay_signature: computeHmacSha256(`${orderId}|${paymentId}`, process.env.RAZORPAY_SECRET!) }),
+      }));
+      assert.strictEqual(res.status, 409);
+      assert.strictEqual(mockDb.commissions[commissionId].status, "payment_pending");
+    });
+
+    test("client verify requires an order already attached to the commission", async () => {
+      mockDb.commissions[commissionId].razorpay_order_id = null;
+      const res = await verifyPayment(new NextRequest("http://localhost:3000/api/payment/verify", {
+        method: "POST", body: JSON.stringify({ commissionId, razorpay_order_id: orderId,
+          razorpay_payment_id: paymentId,
+          razorpay_signature: computeHmacSha256(`${orderId}|${paymentId}`, process.env.RAZORPAY_SECRET!) }),
+      }));
+      assert.strictEqual(res.status, 409);
+      assert.strictEqual(mockDb.commissions[commissionId].status, "payment_pending");
+    });
+
+    test("captured payment for an issued order is recorded even after quote expiry", async () => {
+      mockDb.commissions[commissionId].status = "expired";
+      mockDb.commissions[commissionId].expires_at = new Date(Date.now() - 3600000).toISOString();
+      const res = await verifyPayment(new NextRequest("http://localhost:3000/api/payment/verify", {
+        method: "POST", body: JSON.stringify({ commissionId, razorpay_order_id: orderId,
+          razorpay_payment_id: paymentId,
+          razorpay_signature: computeHmacSha256(`${orderId}|${paymentId}`, process.env.RAZORPAY_SECRET!) }),
+      }));
+      assert.strictEqual(res.status, 200);
+      assert.strictEqual(mockDb.commissions[commissionId].status, "paid");
+    });
+
     test("client verify handles webhook race condition idempotently when already marked paid", async () => {
       // Simulate that the webhook arrived first and marked the commission as paid
       mockDb.commissions[commissionId].status = "paid";
       mockDb.commissions[commissionId].razorpay_payment_id = paymentId;
       mockDb.commissions[commissionId].checkout_token_hash = null;
+      _setRazorpayInstanceForTesting({ payments: { fetch: async () => { throw new Error("gateway unavailable"); } } } as any);
 
       const validSig = computeHmacSha256(
         `${orderId}|${paymentId}`,
@@ -593,9 +740,9 @@ describe("ARTfolio Phase 2 Security Hardening & Regression Tests", () => {
         body: webhookPayload,
       });
       const res = await paymentWebhook(req);
-      assert.strictEqual(res.status, 400);
+      assert.strictEqual(res.status, 403);
       const json = await res.json();
-      assert.ok((json.error || json.message).includes("Signature verification failed"));
+      assert.ok((json.error || json.message).includes("Invalid webhook signature"));
     });
 
     test("webhook rejects mismatched payment amount", async () => {
@@ -623,9 +770,9 @@ describe("ARTfolio Phase 2 Security Hardening & Regression Tests", () => {
         body: webhookPayload,
       });
       const res = await paymentWebhook(req);
-      assert.strictEqual(res.status, 400);
+      assert.strictEqual(res.status, 409);
       const json = await res.json();
-      assert.ok((json.error || json.message).includes("amount does not match"));
+      assert.ok((json.error || json.message).includes("does not match quote"));
     });
 
     test("webhook is idempotent on duplicate payment.captured events", async () => {
@@ -667,8 +814,9 @@ describe("ARTfolio Phase 2 Security Hardening & Regression Tests", () => {
       assert.strictEqual(json2.success, true);
     });
 
-    test("refund webhook updates existing payment record instead of inserting duplicate", async () => {
+    test("refund creation stays pending and only a processed full refund marks payment refunded", async () => {
       // First create existing payment record in DB
+      Object.assign(mockDb.commissions[commissionId], { status: "paid", razorpay_payment_id: paymentId });
       mockDb.payments[paymentId] = {
         id: crypto.randomUUID(),
         commission_id: commissionId,
@@ -686,7 +834,7 @@ describe("ARTfolio Phase 2 Security Hardening & Regression Tests", () => {
             entity: {
               id: "rfnd_12345",
               payment_id: paymentId,
-              amount: 500000,
+              amount: 400000,
               currency: "INR",
               notes: { commission_id: commissionId },
             },
@@ -702,10 +850,50 @@ describe("ARTfolio Phase 2 Security Hardening & Regression Tests", () => {
       });
       const res = await paymentWebhook(req);
       assert.strictEqual(res.status, 200);
-
-      // Verify payment was updated to refunded without duplicate insertion
       const paymentRow = mockDb.payments[paymentId];
+      assert.strictEqual(paymentRow.status, "captured", "refund.created does not prove money was returned");
+
+      const partialPayload = JSON.stringify({ event: "refund.processed", payload: { refund: { entity: {
+        id: "rfnd_partial", payment_id: paymentId, amount: 100000, currency: "INR", status: "processed",
+      } } } });
+      const partial = await paymentWebhook(new NextRequest("http://localhost:3000/api/payment/webhook", {
+        method: "POST", headers: { "x-razorpay-signature": computeHmacSha256(partialPayload, process.env.RAZORPAY_WEBHOOK_SECRET!) },
+        body: partialPayload,
+      }));
+      assert.strictEqual(partial.status, 200);
+      assert.strictEqual(paymentRow.status, "captured", "partial refund is not a full refund");
+
+      const processedPayload = JSON.stringify({ event: "refund.processed", payload: { refund: { entity: {
+        id: "rfnd_12345", payment_id: paymentId, amount: 400000, currency: "INR", status: "processed",
+      } } } });
+      const processed = await paymentWebhook(new NextRequest("http://localhost:3000/api/payment/webhook", {
+        method: "POST", headers: { "x-razorpay-signature": computeHmacSha256(processedPayload, process.env.RAZORPAY_WEBHOOK_SECRET!) },
+        body: processedPayload,
+      }));
+      assert.strictEqual(processed.status, 200);
       assert.strictEqual(paymentRow.status, "refunded");
+
+      const lateCreated = await paymentWebhook(new NextRequest("http://localhost:3000/api/payment/webhook", {
+        method: "POST", headers: {
+          "x-razorpay-signature": validSig,
+          "x-razorpay-event-id": "evt_late_refund_created",
+        }, body: refundPayload,
+      }));
+      assert.strictEqual(lateCreated.status, 200);
+      const refundRow = Object.values(mockDb.commission_refunds).find((row: any) => row.razorpay_refund_id === "rfnd_12345");
+      assert.strictEqual(refundRow?.status, "processed", "late refund.created must not reverse processed state");
+
+      const lateCapturePayload = JSON.stringify({ event: "payment.captured", payload: { payment: { entity: {
+        id: paymentId, order_id: orderId, amount: 500000, currency: "INR",
+      } } } });
+      const lateCapture = await paymentWebhook(new NextRequest("http://localhost:3000/api/payment/webhook", {
+        method: "POST", headers: {
+          "x-razorpay-signature": computeHmacSha256(lateCapturePayload, process.env.RAZORPAY_WEBHOOK_SECRET!),
+          "x-razorpay-event-id": "evt_late_capture_after_refund",
+        }, body: lateCapturePayload,
+      }));
+      assert.strictEqual(lateCapture.status, 200);
+      assert.strictEqual(paymentRow.status, "refunded", "late capture must not reverse full refund");
     });
   });
 

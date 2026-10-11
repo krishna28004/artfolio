@@ -14,17 +14,13 @@ export interface AdminAuthResult {
  * Every privileged route must independently call this verifier.
  *
  * Verifies either:
- * 1. An authenticated Supabase session where the user email matches the authorized admin identity,
- *    or where server-assigned app_metadata.role === 'admin' (NEVER client-writable user_metadata).
+ * 1. An authenticated Supabase session whose verified email matches the configured owner.
  * 2. A secure server-to-server header (x-admin-key, x-admin-secret, or Bearer token)
  *    matching ADMIN_API_SECRET / ADMIN_API_KEY verified in constant time.
  */
 export async function verifyAdminAuth(req?: NextRequest): Promise<AdminAuthResult> {
-  const adminEmail = (
-    process.env.ADMIN_NOTIFICATION_EMAIL ||
-    process.env.ADMIN_EMAIL ||
-    "artist@artfolio.luxury"
-  ).toLowerCase().trim();
+  const adminEmail = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
+  if (!adminEmail) return { authorized: false, error: "Owner identity is not configured." };
 
   // 1. Check API Key Header (if request object is provided)
   if (req) {
@@ -56,15 +52,13 @@ export async function verifyAdminAuth(req?: NextRequest): Promise<AdminAuthResul
 
     const sessionEmail = user.email.toLowerCase().trim();
 
-    // Verify authorized admin identity or server-assigned app_metadata role ONLY.
-    // user_metadata is client-writable upon registration and must NEVER be trusted for authorization.
+    // Only the configured owner identity may use this single-artist portal.
     const isAuthorizedEmail = sessionEmail === adminEmail;
-    const isAuthorizedRole = user.app_metadata?.role === "admin";
 
-    if (!isAuthorizedEmail && !isAuthorizedRole) {
+    if (!isAuthorizedEmail) {
       return {
         authorized: false,
-        error: `Forbidden: Identity '${sessionEmail}' is not in the authorized admin allowlist.`,
+        error: "Forbidden: this account is not the configured owner.",
       };
     }
 

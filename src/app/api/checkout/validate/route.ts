@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
     const { data: commission, error } = await supabaseAdmin
       .from("commissions")
-      .select("id, name, email, size, budget, price, currency, status, expires_at, checkout_token_hash")
+      .select("id, name, email, size, budget, price, currency, status, expires_at, checkout_token_hash, quote_version, accepted_quote_version")
       .eq("id", commissionId)
       .single();
 
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. State Machine Checks (Only executed AFTER successful authorization)
-    if (commission.status === "paid" || commission.status === "fulfilled") {
+    if (["paid", "in_progress", "revision_requested", "ready_for_delivery", "delivered", "completed", "fulfilled"].includes(commission.status)) {
       return NextResponse.json(
         { success: false, message: "Commission has already been paid and finalized. Checkout authorization is no longer valid." },
         { status: 409 }
@@ -96,9 +96,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (commission.quote_version > 0 && commission.accepted_quote_version !== commission.quote_version) {
+      return NextResponse.json({ success: false, message: "The current quote has not been accepted." }, { status: 409 });
+    }
+
     // 4. Expiration validation
     if (commission.expires_at && new Date() > new Date(commission.expires_at)) {
-      await supabaseAdmin.from("commissions").update({ status: "expired" }).eq("id", commissionId);
+      await supabaseAdmin.from("commissions").update({ status: "expired" }).eq("id", commissionId)
+        .in("status", ["approved", "payment_pending"]);
       return NextResponse.json(
         { success: false, status: "expired", message: "This exclusive 24-hour acquisition window has expired." },
         { status: 410 }

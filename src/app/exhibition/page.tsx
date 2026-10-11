@@ -6,18 +6,11 @@ import { Loader } from "@react-three/drei";
 import { GalleryScene, GalleryArtwork } from "@/components/exhibition/GalleryScene";
 import { ExhibitionErrorBoundary } from "@/components/exhibition/ExhibitionErrorBoundary";
 import { ArtworkDetailModal } from "@/components/exhibition/ArtworkDetailModal";
-import { movementState, walkToTarget } from "@/components/exhibition/Controls";
+import { MobileControls } from "@/components/exhibition/MobileControls";
 import { Artwork } from "@/features/artwork/data/artworks";
 import { isValid3DPosition } from "@/features/artwork/utils/exhibition-validation";
-
-/* Helper: set a movement direction on/off */
-function press(dir: "forward" | "backward" | "left" | "right") {
-  walkToTarget.active = false;
-  movementState[dir] = true;
-}
-function release(dir: "forward" | "backward" | "left" | "right") {
-  movementState[dir] = false;
-}
+import { safeRequestPointerLock } from "@/components/exhibition/controllers/pointer-lock-manager";
+import { isTouchCapable, isFinePointerOnly } from "@/components/exhibition/touch/touch-controller";
 
 export default function ExhibitionPage() {
   const [entered, setEntered] = useState(false);
@@ -188,6 +181,17 @@ export default function ExhibitionPage() {
     };
   }, [showWalkHint]);
 
+  // Designated desktop mouse-look entry via trusted user gesture
+  const enterMouseLook = useCallback(() => {
+    if (selectedArtworkModal) return;
+    const canvas = document.querySelector("canvas");
+    if (canvas) {
+      safeRequestPointerLock(canvas, {
+        isTouchDevice: isTouchCapable() && !isFinePointerOnly(),
+      }).catch(() => {});
+    }
+  }, [selectedArtworkModal]);
+
   return (
     <div className="fixed inset-0 w-full h-[100dvh] overflow-hidden bg-[#0d0d0d] select-none">
       {/* Drei Loader — Outside Canvas with luxury styling */}
@@ -258,9 +262,9 @@ export default function ExhibitionPage() {
 
               <button
                 onClick={() => setShowHUD(!showHUD)}
-                className="pointer-events-auto mt-4 px-4 py-2 font-sans text-[10px] uppercase tracking-widest text-[#a0a0a0] border border-white/10 bg-black/60 rounded-md md:hidden hover:bg-white/10 active:scale-95 transition-all"
+                className="pointer-events-auto mt-4 px-3.5 py-1.5 font-sans text-[10px] uppercase tracking-widest text-[#a0a0a0] border border-white/10 bg-black/60 rounded-md hover:bg-white/10 active:scale-95 transition-all"
               >
-                {showHUD ? "Hide Controls" : "Show Controls"}
+                {showHUD ? "Hide Touch Controls" : "Touch Controls"}
               </button>
             </div>
 
@@ -347,7 +351,7 @@ export default function ExhibitionPage() {
 
           {/* Focused Artwork Proximity Card */}
           {focusedArtwork && !selectedArtworkModal && (
-            <div className="absolute bottom-8 right-8 z-30 max-w-sm p-5 bg-black/85 backdrop-blur-md border border-primary/40 rounded-xl shadow-2xl animate-in fade-in slide-in-from-bottom-3 pointer-events-auto">
+            <div className="absolute bottom-[max(5.5rem,env(safe-area-inset-bottom))] left-4 right-4 sm:left-auto sm:right-8 sm:bottom-8 z-30 sm:max-w-sm p-4 sm:p-5 bg-black/85 backdrop-blur-md border border-primary/40 rounded-xl shadow-2xl animate-in fade-in slide-in-from-bottom-3 pointer-events-auto">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <span className="text-[9px] uppercase tracking-[0.25em] text-primary font-semibold block mb-1">
@@ -369,17 +373,17 @@ export default function ExhibitionPage() {
               <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between gap-3">
                 <button
                   onClick={() => setSelectedArtworkModal(focusedArtwork)}
-                  className="px-3.5 py-1.5 bg-primary text-[#1a0f00] font-sans text-[10px] uppercase tracking-widest font-bold rounded hover:brightness-110 active:scale-95 transition-all shadow-[0_0_12px_rgba(242,202,80,0.2)] focus:ring-1 focus:ring-primary focus:outline-none"
+                  className="px-4 py-2 bg-primary text-[#1a0f00] font-sans text-[10px] uppercase tracking-widest font-bold rounded-lg hover:brightness-110 active:scale-95 transition-all shadow-[0_0_12px_rgba(242,202,80,0.2)] focus:ring-1 focus:ring-primary focus:outline-none min-h-[40px]"
                 >
                   Inspect Artwork
                 </button>
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-[9px] text-white/50 border border-white/15 px-1.5 py-0.5 rounded">
+                  <span className="hidden sm:inline font-mono text-[9px] text-white/50 border border-white/15 px-1.5 py-0.5 rounded">
                     [E]
                   </span>
                   <Link
                     href={`/artwork/${focusedArtwork.id}`}
-                    className="text-[10px] uppercase tracking-widest text-white/60 hover:text-white transition-colors ml-1"
+                    className="text-[10px] uppercase tracking-widest text-white/60 hover:text-white transition-colors ml-1 p-2 min-h-[40px] flex items-center"
                   >
                     Dossier &rarr;
                   </Link>
@@ -388,105 +392,39 @@ export default function ExhibitionPage() {
             </div>
           )}
 
-          {/* ========== ON-SCREEN NAVIGATION BUTTONS (Mobile) ========== */}
-          {showHUD && (
-            <div className="absolute bottom-8 left-8 z-30 flex flex-col items-center gap-2 md:hidden animate-in fade-in slide-in-from-bottom-4">
-              {/* Forward */}
-              <button
-                className="w-14 h-14 flex items-center justify-center bg-black/50 backdrop-blur-md border border-white/15 active:bg-white/20 transition-colors rounded-lg touch-none"
-                onPointerDown={(e) => {
-                  e.currentTarget.setPointerCapture(e.pointerId);
-                  press("forward");
-                }}
-                onPointerUp={(e) => {
-                  e.currentTarget.releasePointerCapture(e.pointerId);
-                  release("forward");
-                }}
-                onPointerLeave={() => release("forward")}
-                onPointerCancel={() => release("forward")}
-                onContextMenu={(e) => e.preventDefault()}
-                aria-label="Walk Forward"
-              >
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                  <path d="M10 4L16 14H4L10 4Z" fill="rgba(255,255,255,0.7)" />
-                </svg>
-              </button>
+          {/* ========== MOBILE & TABLET TOUCH CONTROLS (Phase 4A) ========== */}
+          <MobileControls
+            isModalOpen={!!selectedArtworkModal}
+            onInspectArtwork={() => {
+              if (focusedArtwork) setSelectedArtworkModal(focusedArtwork);
+            }}
+            hasArtworkInFocus={!!focusedArtwork}
+            forceShowControls={showHUD}
+          />
 
-              {/* Middle row: Left, Backward, Right */}
-              <div className="flex gap-2">
+          {/* Desktop Navigation Hints & Explicit Look Control */}
+          {!selectedArtworkModal && !showHUD && (
+            <div className="absolute bottom-8 right-8 z-30 hidden md:flex flex-col items-end gap-2">
+              {!isPointerLocked ? (
                 <button
-                  className="w-14 h-14 flex items-center justify-center bg-black/50 backdrop-blur-md border border-white/15 active:bg-white/20 transition-colors rounded-lg touch-none"
-                  onPointerDown={(e) => {
-                    e.currentTarget.setPointerCapture(e.pointerId);
-                    press("left");
-                  }}
-                  onPointerUp={(e) => {
-                    e.currentTarget.releasePointerCapture(e.pointerId);
-                    release("left");
-                  }}
-                  onPointerLeave={() => release("left")}
-                  onPointerCancel={() => release("left")}
-                  onContextMenu={(e) => e.preventDefault()}
-                  aria-label="Step Left"
+                  type="button"
+                  onClick={enterMouseLook}
+                  className="pointer-events-auto px-4 py-2 font-sans text-[11px] uppercase tracking-widest text-[#d4af37] border border-[#d4af37]/50 bg-black/80 backdrop-blur-md rounded-lg hover:bg-[#d4af37]/15 hover:border-[#f2ca50] active:scale-95 transition-all shadow-[0_0_15px_rgba(212,175,55,0.25)] flex items-center gap-2 group cursor-pointer focus:ring-1 focus:ring-primary focus:outline-none"
+                  aria-label="Click to look around with mouse"
                 >
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                    <path d="M4 10L14 4V16L4 10Z" fill="rgba(255,255,255,0.7)" />
-                  </svg>
+                  <span className="w-2 h-2 rounded-full bg-[#f2ca50] animate-pulse group-hover:scale-125 transition-transform" />
+                  <span>Click to look around</span>
+                  <span className="font-mono text-[9px] text-white/50 border border-white/20 px-1 py-0.5 rounded">
+                    ESC to exit
+                  </span>
                 </button>
-
-                <button
-                  className="w-14 h-14 flex items-center justify-center bg-black/50 backdrop-blur-md border border-white/15 active:bg-white/20 transition-colors rounded-lg touch-none"
-                  onPointerDown={(e) => {
-                    e.currentTarget.setPointerCapture(e.pointerId);
-                    press("backward");
-                  }}
-                  onPointerUp={(e) => {
-                    e.currentTarget.releasePointerCapture(e.pointerId);
-                    release("backward");
-                  }}
-                  onPointerLeave={() => release("backward")}
-                  onPointerCancel={() => release("backward")}
-                  onContextMenu={(e) => e.preventDefault()}
-                  aria-label="Walk Backward"
-                >
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                    <path d="M10 16L4 6H16L10 16Z" fill="rgba(255,255,255,0.7)" />
-                  </svg>
-                </button>
-
-                <button
-                  className="w-14 h-14 flex items-center justify-center bg-black/50 backdrop-blur-md border border-white/15 active:bg-white/20 transition-colors rounded-lg touch-none"
-                  onPointerDown={(e) => {
-                    e.currentTarget.setPointerCapture(e.pointerId);
-                    press("right");
-                  }}
-                  onPointerUp={(e) => {
-                    e.currentTarget.releasePointerCapture(e.pointerId);
-                    release("right");
-                  }}
-                  onPointerLeave={() => release("right")}
-                  onPointerCancel={() => release("right")}
-                  onContextMenu={(e) => e.preventDefault()}
-                  aria-label="Step Right"
-                >
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                    <path d="M16 10L6 16V4L16 10Z" fill="rgba(255,255,255,0.7)" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Desktop Navigation Hints */}
-          {!focusedArtwork && (
-            <div className="absolute bottom-8 right-8 z-30 hidden md:flex flex-col items-end gap-1 opacity-50 pointer-events-none">
-              <div className="font-mono text-[10px] text-white/70 tracking-wider">
+              ) : (
+                <div className="font-mono text-[10px] text-white/70 tracking-wider bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded border border-white/10 pointer-events-none">
+                  Mouse Look active · Press <span className="text-[#f2ca50]">ESC</span> to release cursor
+                </div>
+              )}
+              <div className="font-mono text-[10px] text-white/50 tracking-wider pointer-events-none">
                 WASD / Arrows to Walk · Shift to Sprint
-              </div>
-              <div className="font-mono text-[10px] text-white/70 tracking-wider">
-                {isPointerLocked
-                  ? "Mouse Look active · Press ESC to release cursor"
-                  : "Click gallery to look around · Double-click floor to Walk"}
               </div>
             </div>
           )}
@@ -500,22 +438,22 @@ export default function ExhibitionPage() {
             Virtual Gallery Exhibition
           </h1>
 
-          <div className="flex flex-col gap-6 text-center max-w-sm mb-10 bg-white/5 border border-white/10 p-8 rounded-xl shadow-2xl">
+          <div className="flex flex-col gap-5 text-center max-w-sm mb-10 bg-white/5 border border-white/10 p-6 sm:p-8 rounded-xl shadow-2xl">
             <div>
-              <div className="font-sans text-[10px] text-muted tracking-widest uppercase mb-2">
-                Desktop Pointer
+              <div className="font-sans text-[10px] text-muted tracking-widest uppercase mb-1">
+                Desktop Controls
               </div>
-              <div className="font-mono text-white text-[13px]">
-                Click gallery to look around · Press ESC to release cursor
+              <div className="font-mono text-white text-[12px] sm:text-[13px] leading-relaxed">
+                Click gallery to look around · WASD / Arrows to walk · Double-click floor
               </div>
             </div>
             <div className="w-12 h-[1px] bg-white/10 mx-auto"></div>
             <div>
-              <div className="font-sans text-[10px] text-muted tracking-widest uppercase mb-2">
-                Movement
+              <div className="font-sans text-[10px] text-muted tracking-widest uppercase mb-1">
+                Mobile &amp; Tablet
               </div>
-              <div className="font-mono text-white text-[13px] leading-relaxed">
-                Use WASD / Arrow keys, or double-click any spot on the floor to walk.
+              <div className="font-mono text-white text-[12px] sm:text-[13px] leading-relaxed">
+                Left joystick to walk · Right drag to look · Tap floor or artwork to interact
               </div>
             </div>
           </div>
@@ -523,13 +461,13 @@ export default function ExhibitionPage() {
           <div className="flex flex-col sm:flex-row gap-4 mb-[env(safe-area-inset-bottom)]">
             <button
               onClick={completeOnboarding}
-              className="px-8 py-3 bg-primary text-[#1a0f00] font-sans uppercase tracking-[0.15em] text-[11px] font-bold hover:brightness-110 active:scale-95 transition-all shadow-[0_0_20px_rgba(242,202,80,0.15)]"
+              className="px-8 py-3.5 bg-primary text-[#1a0f00] font-sans uppercase tracking-[0.15em] text-[11px] font-bold hover:brightness-110 active:scale-95 transition-all shadow-[0_0_20px_rgba(242,202,80,0.15)] min-h-[44px]"
             >
               Enter Exhibition
             </button>
             <Link
               href="/exhibition/accessible"
-              className="px-8 py-3 bg-transparent text-white/70 font-sans uppercase tracking-[0.15em] text-[11px] hover:text-white border border-white/20 active:scale-95 hover:bg-white/5 transition-all text-center flex items-center justify-center"
+              className="px-8 py-3.5 bg-transparent text-white/70 font-sans uppercase tracking-[0.15em] text-[11px] hover:text-white border border-white/20 active:scale-95 hover:bg-white/5 transition-all text-center flex items-center justify-center min-h-[44px]"
             >
               Accessible 2D Archive &rarr;
             </Link>

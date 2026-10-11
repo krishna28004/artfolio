@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { Container } from "./Container";
 import { Sidebar } from "./Sidebar";
@@ -8,15 +8,24 @@ import { useFavorites } from "@/features/favorites/hooks/use-favorites";
 
 export function Navbar() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const { favorites } = useFavorites();
 
-  // Prevent scrolling when sidebar is open
+  // Prevent background scrolling and restore the trigger when the menu closes.
   useEffect(() => {
-    if (isSidebarOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "unset";
-    }
+    if (!isSidebarOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const trigger = menuButtonRef.current;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsSidebarOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+      trigger?.focus();
+    };
   }, [isSidebarOpen]);
 
   return (
@@ -48,9 +57,12 @@ export function Navbar() {
 
               {/* Hamburger Button */}
               <button
+                ref={menuButtonRef}
                 onClick={() => setIsSidebarOpen(true)}
-                className="flex flex-col justify-center items-center w-10 h-10 gap-1.5 group z-50"
+                className="flex flex-col justify-center items-center w-11 h-11 gap-1.5 group z-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
                 aria-label="Open Menu"
+                aria-expanded={isSidebarOpen}
+                aria-controls="site-menu-panel"
               >
                 <div className="w-8 h-[1px] bg-text group-hover:bg-primary transition-colors duration-[600ms]"></div>
                 <div className="w-8 h-[1px] bg-text group-hover:bg-primary transition-colors duration-[600ms]"></div>

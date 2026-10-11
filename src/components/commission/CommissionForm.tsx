@@ -9,7 +9,7 @@ import {
   commissionSchema,
   CommissionFormData,
 } from "@/features/commission/schema/commission-schema";
-import { uploadImageToCloudinarySigned } from "@/shared/services/cloudinary";
+import { uploadPrivateReference, type PrivateReferenceClaim } from "@/shared/services/cloudinary";
 
 interface CommissionFormProps {
   initialReference?: string;
@@ -31,8 +31,13 @@ const BUDGET_OPTIONS = [
 
 export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [submittedId, setSubmittedId] = useState("");
   const [uploadState, setUploadState] = useState<"idle" | "uploading" | "done" | "error">("idle");
-  const [fileMeta, setFileMeta] = useState<{ name: string; size: string } | null>(null);
+  const [referenceFiles, setReferenceFiles] = useState<PrivateReferenceClaim[]>([]);
+  const referenceFilesRef = useRef<PrivateReferenceClaim[]>([]);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [trackingToken, setTrackingToken] = useState("");
+  const [submittedReference, setSubmittedReference] = useState("");
   const [serverError, setServerError] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -55,8 +60,7 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
       idempotencyKey: "",
       name: "",
       email: "",
-      imageUrl: "",
-      publicId: "",
+      fileClaims: [],
       size: "Medium (24\" – 48\")",
       budget: "₹5,000 – ₹10,000",
       deadline: "",
@@ -74,8 +78,8 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
 
   const processUpload = useCallback(
     async (file: File) => {
-      if (!file.type.startsWith("image/")) {
-        setServerError("Please upload a valid image file (JPG, PNG, WebP).");
+      if (!["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(file.type)) {
+        setServerError("Please upload a JPG, PNG, WebP, or PDF file.");
         setUploadState("error");
         return;
       }
@@ -86,49 +90,49 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
         return;
       }
 
+      if (referenceFilesRef.current.length >= 5) {
+        setServerError("You can attach up to five reference files.");
+        return;
+      }
       setUploadState("uploading");
+      setUploadProgress(0);
       setServerError("");
 
       try {
-        const result = await uploadImageToCloudinarySigned(file);
-        if (result && result.url) {
-          setValue("imageUrl", result.url, { shouldValidate: true });
-          setValue("publicId", result.publicId);
-          setFileMeta({
-            name: file.name,
-            size: (file.size / (1024 * 1024)).toFixed(1) + " MB",
-          });
-          setUploadState("done");
-        } else {
-          setUploadState("error");
-          setServerError("Failed to upload reference image. Please retry.");
-        }
-      } catch {
+        const result = await uploadPrivateReference(file, setUploadProgress);
+        const next = [...referenceFilesRef.current, result];
+        referenceFilesRef.current = next;
+        setReferenceFiles(next);
+        setValue("fileClaims", next.map(({ id, token }) => ({ id, token })), { shouldValidate: true });
+        setUploadState("done");
+      } catch (error) {
         setUploadState("error");
-        setServerError("Failed to upload reference image.");
+        setServerError(error instanceof Error ? error.message : "Failed to upload reference file.");
       }
     },
     [setValue]
   );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) processUpload(file);
+    const files = Array.from(e.target.files || []);
+    void (async () => { for (const file of files) await processUpload(file); })();
+    e.target.value = "";
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragOver(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) processUpload(file);
+    const files = Array.from(e.dataTransfer.files || []);
+    void (async () => { for (const file of files) await processUpload(file); })();
   };
 
-  const handleRemoveAttachment = (e: React.MouseEvent) => {
+  const handleRemoveAttachment = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    setValue("imageUrl", "");
-    setValue("publicId", "");
-    setFileMeta(null);
-    setUploadState("idle");
+    const next = referenceFiles.filter((file) => file.id !== id);
+    referenceFilesRef.current = next;
+    setReferenceFiles(next);
+    setValue("fileClaims", next.map(({ id, token }) => ({ id, token })), { shouldValidate: true });
+    setUploadState(next.length ? "done" : "idle");
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -152,9 +156,16 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
         clearTimeout(timeoutId);
         const resData = await res.json();
         if (!res.ok || !resData.success) {
+          if (res.status < 500) {
+            setServerError(resData.message || "Please check your request and try again.");
+            return;
+          }
           throw new Error(resData.message || "Failed to submit commission request.");
         }
 
+        setSubmittedId(resData.id || "");
+        setSubmittedReference(resData.reference || "");
+        setTrackingToken(resData.trackingToken || "");
         setIsSubmitted(true);
         return;
       } catch (err: unknown) {
@@ -189,6 +200,9 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
         <p className="font-sans text-[14px] sm:text-[15px] text-muted leading-relaxed font-light mb-8">
           Your commission request has been received and will be reviewed personally by the artist.
         </p>
+        {submittedReference && <p className="font-mono text-xs text-muted mb-3">Request reference: {submittedReference}</p>}
+        {submittedId && trackingToken && <Link href={`/commission/track/open?id=${encodeURIComponent(submittedId)}&token=${encodeURIComponent(trackingToken)}`}
+          className="block text-primary underline underline-offset-4 text-sm mb-8">Track your private request</Link>}
         <Link
           href="/"
           className="inline-flex items-center justify-center px-8 py-3.5 border border-white/20 text-[11px] uppercase tracking-[0.2em] text-text hover:border-primary hover:text-primary transition-colors font-sans"
@@ -253,34 +267,24 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/jpeg, image/png, image/webp"
+          accept="image/jpeg,image/png,image/webp,application/pdf"
+          multiple
           onChange={handleFileChange}
           className="hidden"
         />
 
-        {uploadState === "done" && fileMeta ? (
-          <div className="flex items-center justify-between p-3.5 bg-white/[0.02] border border-white/10">
-            <div className="flex items-center gap-3 min-w-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
-              <div className="truncate">
-                <p className="text-[13px] text-text font-sans truncate">{fileMeta.name}</p>
-                <p className="text-[11px] text-muted/60 font-sans">{fileMeta.size} · Uploaded</p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={handleRemoveAttachment}
-              className="text-[11px] text-muted hover:text-red-400 transition-colors uppercase tracking-wider px-2 py-1 flex items-center gap-1 font-sans"
-            >
-              <X className="w-3.5 h-3.5" />
-              <span>Remove</span>
-            </button>
+        {referenceFiles.map((file) => (
+          <div key={file.id} className="flex items-center justify-between p-3.5 bg-white/[0.02] border border-white/10">
+            <p className="text-[13px] text-text font-sans truncate">{file.name} · {(file.size / 1048576).toFixed(1)} MB</p>
+            <button type="button" onClick={(event) => handleRemoveAttachment(event, file.id)}
+              aria-label={`Remove ${file.name}`} className="text-muted hover:text-red-400 p-2"><X className="w-4 h-4" /></button>
           </div>
-        ) : (
+        ))}
+        {referenceFiles.length < 5 && (
           <div
             role="button"
             tabIndex={0}
-            aria-label="Upload reference material. Drag and drop an image or press Enter to browse files."
+            aria-label="Upload reference material. Drag and drop files or press Enter to browse."
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
@@ -303,15 +307,17 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
             <Upload className="w-4 h-4 text-muted/60 group-hover:text-primary transition-colors" />
             <p className="text-[13px] text-text/90 font-sans font-light">
               {uploadState === "uploading"
-                ? "Uploading reference safely..."
-                : "Drag & drop reference image, or browse"}
+                ? `Uploading privately... ${uploadProgress}%`
+                : "Drag & drop references, or browse"}
             </p>
             <p className="text-[10px] text-muted/50 tracking-wider uppercase font-sans">
-              JPG, PNG or WebP · Up to 10 MB
+              JPG, PNG, WebP or PDF · Up to 10 MB each · 5 files
             </p>
           </div>
         )}
       </div>
+
+      <p className="text-[11px] text-muted/60 -mt-8">References are stored privately and shared only with the studio.</p>
 
       {/* 3. Desired Scale (4 cols desktop, 2x2 mobile) */}
       <div className="flex flex-col gap-2.5">
@@ -413,6 +419,7 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
           className="w-full bg-transparent border-b border-white/15 py-3 px-0 text-text placeholder:text-muted/30 focus:outline-none focus:border-primary transition-colors text-[14px] font-sans [color-scheme:dark]"
         />
         <span className="text-[11px] text-muted/50 font-sans mt-1">Optional completion timeframe</span>
+        {errors.deadline && <span className="text-red-400/90 text-[12px] mt-1.5 font-sans">{errors.deadline.message}</span>}
       </div>
 
       {/* 6. Your Vision Narrative */}
@@ -444,7 +451,7 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
       </div>
 
       {serverError && (
-        <div className="p-3 bg-red-950/20 border border-red-500/30 text-red-400 text-[13px] font-sans text-center">
+        <div role="alert" className="p-3 bg-red-950/20 border border-red-500/30 text-red-400 text-[13px] font-sans text-center">
           {serverError}
         </div>
       )}
