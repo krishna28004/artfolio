@@ -20,7 +20,7 @@ const InstagramIcon = ({ className, strokeWidth = 2 }: { className?: string; str
 
 export function About() {
     return (
-        <Section className="!pt-8 !pb-20 md:!pt-16 md:!pb-24 border-t border-white/5 bg-[#0a0a0a]" id="about">
+        <Section className="py-32 border-t border-white/5 bg-[#0a0a0a]" id="about">
             <div className="max-w-6xl mx-auto flex flex-col md:flex-row gap-16 lg:gap-24 items-center">
 
                 {/* Left Side: Text */}

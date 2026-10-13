@@ -1,4 +1,3 @@
-import { isPaymentCheckoutEnabled } from "@/shared/utils/release-controls";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import crypto from "crypto";
@@ -13,9 +12,6 @@ const createOrderSchema = z.object({
 });
 
 export async function POST(req: Request) {
-  if (!isPaymentCheckoutEnabled()) return NextResponse.json({ success: false, message: "Checkout is temporarily unavailable. Please try again later." }, {
-    status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "3600" },
-  });
   try {
     const rawBody = await req.json();
     const parseResult = createOrderSchema.safeParse(rawBody);

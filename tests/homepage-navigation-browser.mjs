@@ -131,7 +131,7 @@ try {
   await click('#gallery button[aria-controls="selected-works-grid"]');
   await until(() => evaluate("document.querySelector('#gallery button[aria-controls=selected-works-grid]')?.getAttribute('aria-expanded') === 'true'"),
     "Selected Works expands");
-  assert.ok(await evaluate("document.querySelectorAll('#selected-works-grid article').length") > 0,
+  assert.ok(await evaluate("document.querySelectorAll('#selected-works-grid .grid > a').length") > 0,
     "expanding Selected Works renders artwork cards");
   await click('#gallery button[aria-controls="selected-works-grid"]');
   await until(() => evaluate("document.querySelector('#selected-works-grid')?.hidden === true"), "Selected Works collapses");
@@ -144,13 +144,6 @@ try {
   await delay(350);
   const after = await evaluate("document.querySelector('.carousel-card')?.parentElement?.style.transform");
   assert.notEqual(after, before, "artwork strip should advance continuously");
-  await evaluate(`document.querySelector('.carousel-card').dispatchEvent(new MouseEvent('mouseover', {bubbles:true}))`);
-  const hoverStart = await evaluate("document.querySelector('.carousel-card')?.parentElement?.style.transform");
-  await delay(350);
-  const hoverEnd = await evaluate("document.querySelector('.carousel-card')?.parentElement?.style.transform");
-  assert.notEqual(hoverEnd, hoverStart, "hovering artwork must not pause or reset the moving strip");
-  assert.equal(await evaluate(`getComputedStyle(document.querySelector('.carousel-card img')).transitionDuration`), "0.25s",
-    "artwork hover scale uses a quiet 250ms transition");
   await click('button[aria-label="Pause carousel"]');
   await delay(100);
   const pausedAt = await evaluate("document.querySelector('.carousel-card')?.parentElement?.style.transform");

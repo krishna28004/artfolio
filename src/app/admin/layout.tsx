@@ -3,27 +3,24 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
-import { useState } from "react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [signOutError, setSignOutError] = useState("");
 
   // Do not wrap login page with the admin navigation
-  if (pathname === "/admin/login" || pathname === "/admin/recovery") {
+  if (pathname === "/admin/login") {
     return <>{children}</>;
   }
 
   const handleSignOut = async () => {
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.signOut({ scope: "global" });
-      if (error) throw error;
+      await supabase.auth.signOut();
       router.push("/admin/login");
       router.refresh();
     } catch {
-      setSignOutError("Could not sign out. Check your connection and try again.");
+      router.push("/admin/login");
     }
   };
 
@@ -90,7 +87,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             {link.label}</Link>)}
         </nav>
       </header>
-      {signOutError && <div role="alert" className="border-b border-red-500/30 p-3 text-center text-sm text-red-300">{signOutError}</div>}
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-10">{children}</main>

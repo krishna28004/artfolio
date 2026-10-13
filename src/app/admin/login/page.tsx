@@ -11,11 +11,6 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mfaStep, setMfaStep] = useState<"login" | "enroll" | "challenge">("login");
-  const [factorId, setFactorId] = useState("");
-  const [qrCode, setQrCode] = useState("");
-  const [manualSecret, setManualSecret] = useState("");
-  const [mfaCode, setMfaCode] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,12 +19,10 @@ export default function AdminLoginPage() {
 
     try {
       const supabase = createClient();
-      const response = await fetch("/api/admin/auth", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "login", email, password }),
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
-      const result = await response.json();
-      const signInError = response.ok ? null : { message: result.error || "Unable to sign in." };
 
       if (signInError) {
         setError(signInError.message);
@@ -37,72 +30,12 @@ export default function AdminLoginPage() {
         return;
       }
 
-      const accessCheck = await fetch("/api/admin/commissions?status=auth", { cache: "no-store" });
-      if (!accessCheck.ok) {
-        await supabase.auth.signOut();
-        setError("This account is not authorized to access the studio portal.");
-        setLoading(false);
-        return;
-      }
-
-      const { data: assurance, error: assuranceError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-      if (assuranceError) throw assuranceError;
-      if (assurance?.currentLevel === "aal2") {
-        router.replace("/admin");
-        router.refresh();
-      } else {
-        const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors();
-        if (factorsError) throw factorsError;
-        const enrolled = factors?.totp?.find((factor) => factor.status === "verified");
-        if (enrolled) {
-          setFactorId(enrolled.id);
-          setMfaStep("challenge");
-        } else {
-          const { data: factor, error: enrollError } = await supabase.auth.mfa.enroll({
-            factorType: "totp", friendlyName: "Artfolio studio",
-          });
-          if (enrollError || !factor?.totp) throw enrollError || new Error("MFA setup failed.");
-          setFactorId(factor.id);
-          setQrCode(factor.totp.qr_code);
-          setManualSecret(factor.totp.secret);
-          setMfaStep("enroll");
-        }
-      }
-      setLoading(false);
-    } catch {
-      setError("Sign-in is unavailable. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY configuration.");
-      setLoading(false);
-    }
-  };
-
-  const verifyMfa = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    try {
-      const supabase = createClient();
-      const { error: verifyError } = await supabase.auth.mfa.challengeAndVerify({
-        factorId, code: mfaCode.trim(),
-      });
-      if (verifyError) throw verifyError;
-      setManualSecret("");
-      setQrCode("");
-      router.replace("/admin");
+      router.push("/admin");
       router.refresh();
-    } catch {
-      setError("The authenticator code could not be verified. Check the code and retry.");
-    } finally {
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to authenticate.");
       setLoading(false);
     }
-  };
-
-  const cancelMfa = async () => {
-    await createClient().auth.signOut();
-    setMfaStep("login");
-    setFactorId("");
-    setQrCode("");
-    setManualSecret("");
-    setMfaCode("");
   };
 
   return (
@@ -116,7 +49,7 @@ export default function AdminLoginPage() {
             Studio Portal
           </h1>
           <p className="font-sans text-muted text-xs mt-2 italic">
-            {mfaStep === "login" ? "Enter administrative credentials to manage commissions and exhibitions." : "Verify your studio sign-in with an authenticator app."}
+            Enter administrative credentials to manage commissions and exhibitions.
           </p>
         </header>
 
@@ -129,7 +62,7 @@ export default function AdminLoginPage() {
           </div>
         )}
 
-        {mfaStep === "login" ? <form onSubmit={handleLogin} className="space-y-6">
+        <form onSubmit={handleLogin} className="space-y-6">
           <div>
             <label
               htmlFor="email"
@@ -172,22 +105,7 @@ export default function AdminLoginPage() {
           >
             {loading ? "Authenticating Identity..." : "Authorize Access &rarr;"}
           </button>
-          <Link href="/admin/recovery" className="block text-center text-xs text-muted underline">Recover studio access</Link>
-        </form> : <form onSubmit={verifyMfa} className="space-y-5">
-          {mfaStep === "enroll" && <div className="space-y-3 text-center text-sm text-muted">
-            <p>Scan this QR code in your authenticator app, then enter its six-digit code.</p>
-            {/* Supabase provides this QR as a data URL during factor enrollment. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={qrCode} alt="Authenticator setup QR code" className="mx-auto w-44 h-44 bg-white p-2" />
-            <p className="break-all text-xs">Manual setup key: <span className="font-mono text-text">{manualSecret}</span></p>
-            <p className="text-xs">Store your recovery method securely before continuing. Account recovery is handled through Supabase administration.</p>
-          </div>}
-          {mfaStep === "challenge" && <p className="text-sm text-muted">Enter the current code from your authenticator app.</p>}
-          <label htmlFor="mfa-code" className="block text-xs text-muted uppercase tracking-wider">Authenticator code</label>
-          <input id="mfa-code" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required value={mfaCode} onChange={(e) => setMfaCode(e.target.value)} className="w-full bg-surface-lowest/50 border border-outline-variant/30 text-text px-4 py-3 text-sm font-sans focus:outline-none focus:border-primary" />
-          <button type="submit" disabled={loading} className="w-full py-4 bg-primary text-black text-xs font-semibold uppercase tracking-widest disabled:opacity-50">{loading ? "Verifying…" : "Verify and open studio"}</button>
-          <button type="button" onClick={() => void cancelMfa()} className="block mx-auto text-xs text-muted underline">Cancel sign-in</button>
-        </form>}
+        </form>
 
         <footer className="mt-8 text-center pt-6 border-t border-outline-variant/10">
           <Link

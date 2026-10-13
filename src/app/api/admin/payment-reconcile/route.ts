@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await verifyAdminAuth(req, { requireMfa: true });
+  const auth = await verifyAdminAuth(req);
   if (!auth.authorized) return NextResponse.json({ success: false }, { status: 401 });
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ success: false, message: "Invalid commission ID." }, { status: 400 });

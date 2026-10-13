@@ -5,7 +5,6 @@ import { ArtworkInfo } from "@/components/artwork/ArtworkInfo";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getArtworkById } from "@/features/artwork/services/artwork-service";
-import { serializeJsonLd } from "@/shared/utils/html";
 
 interface PageProps {
   params: { id: string } | Promise<{ id: string }>;
@@ -51,7 +50,7 @@ export default async function ArtworkPage(props: PageProps) {
     "@context": "https://schema.org",
     "@type": "VisualArtwork",
     name: artwork.title,
-    image: artwork.imageUrls?.length ? artwork.imageUrls : artwork.imageUrl,
+    image: artwork.imageUrl,
     description: artwork.description || undefined,
     artMedium: artwork.medium || "Pencil on Paper",
     artform: "Drawing",
@@ -60,23 +59,21 @@ export default async function ArtworkPage(props: PageProps) {
       name: artwork.artist,
     },
     dateCreated: artwork.year ? String(artwork.year) : undefined,
-    offers: artwork.price && artwork.saleStatus !== "not_for_sale"
+    offers: artwork.price
       ? {
           "@type": "Offer",
           price: (artwork.price / 100).toFixed(2),
           priceCurrency: "INR",
-          availability: artwork.saleStatus === "sold" ? "https://schema.org/SoldOut" : artwork.isAvailable ? "https://schema.org/InStock" : "https://schema.org/PreOrder",
+          availability: artwork.isAvailable ? "https://schema.org/InStock" : "https://schema.org/SoldOut",
         }
       : undefined,
   };
-  // JSON.stringify alone leaves HTML closing tags intact inside script elements.
-  const safeJsonLd = serializeJsonLd(jsonLd);
 
   return (
     <div className="flex-1 flex flex-col bg-background">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: safeJsonLd }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <Section className="pt-8 pb-32">
         {/* Navigation Return & Action block */}
@@ -97,7 +94,7 @@ export default async function ArtworkPage(props: PageProps) {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-y-16 lg:gap-x-20">
           {/* ARTWORK (Domination: 7 Columns) */}
           <div className="lg:col-span-7">
-            <ArtworkDisplay title={artwork.title} imageUrl={artwork.imageUrl} imageUrls={artwork.imageUrls} />
+            <ArtworkDisplay title={artwork.title} imageUrl={artwork.imageUrl} />
           </div>
 
           {/* INFORMATION (Restraint: 5 Columns) */}

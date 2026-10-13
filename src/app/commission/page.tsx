@@ -1,5 +1,3 @@
-import Link from "next/link";
-import { isCommissionIntakeEnabled } from "@/shared/utils/release-controls";
 import { CommissionForm } from "@/components/commission/CommissionForm";
 
 interface PageProps {
@@ -27,20 +25,7 @@ export default async function CommissionPage({ searchParams }: PageProps) {
         </header>
 
         {/* Minimal Premium Commission Form */}
-        <CommissionForm initialReference={artworkRef} acceptingRequests={isCommissionIntakeEnabled()} />
-
-        {/* Self-Service Recovery Footer */}
-        <div className="mt-8 text-center border-t border-border/30 pt-6">
-          <p className="text-[13px] font-sans text-muted">
-            Already submitted an inquiry?{" "}
-            <Link
-              href="/commission/recover"
-              className="text-text hover:text-primary underline underline-offset-4 decoration-border hover:decoration-primary transition-colors"
-            >
-              Find and track your commission
-            </Link>
-          </p>
-        </div>
+        <CommissionForm initialReference={artworkRef} />
       </div>
     </main>
   );

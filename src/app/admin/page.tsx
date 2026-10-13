@@ -11,38 +11,21 @@ interface CommissionSummary {
   status: string;
   budget: string;
   price: number | null;
-  paid_at: string | null;
   created_at: string;
-  estimated_delivery_at: string | null;
-  unread_count: number;
-}
-
-interface DashboardMetrics {
-  net_revenue_paise: number;
-  refund_total_paise: number;
 }
 
 export default function AdminDashboardPage() {
   const [commissions, setCommissions] = useState<CommissionSummary[]>([]);
   const [artworksCount, setArtworksCount] = useState<number>(0);
-  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
-  const [loadAttempt, setLoadAttempt] = useState(0);
-  const [now, setNow] = useState(0);
 
   useEffect(() => {
     async function loadDashboardData() {
-      setLoading(true);
-      setLoadError(false);
       try {
-        const [commRes, artRes, metricsRes] = await Promise.all([
+        const [commRes, artRes] = await Promise.all([
           fetch("/api/admin/commissions"),
           fetch("/api/admin/artworks"),
-          fetch("/api/admin/commissions?status=metrics"),
         ]);
-        setNow(Date.now());
-        if (!commRes.ok || !artRes.ok || !metricsRes.ok) setLoadError(true);
 
         if (commRes.ok) {
           const commData = await commRes.json();
@@ -54,39 +37,23 @@ export default function AdminDashboardPage() {
         if (artRes.ok) {
           const artData = await artRes.json();
           if (artData.success && Array.isArray(artData.data)) {
-            setArtworksCount(artData.data.filter((art: { publication_status: string }) => art.publication_status === "published").length);
-          }
-        }
-        if (metricsRes.ok) {
-          const metricsData = await metricsRes.json();
-          if (metricsData.success && typeof metricsData.data?.net_revenue_paise === "number") {
-            setMetrics(metricsData.data);
+            setArtworksCount(artData.data.length);
           }
         }
       } catch (err) {
         console.warn("[ADMIN_DASHBOARD_FETCH_ERROR]", err);
-        setLoadError(true);
       } finally {
         setLoading(false);
       }
     }
 
     loadDashboardData();
-  }, [loadAttempt]);
+  }, []);
 
-  const pendingCount = commissions.filter((c) => ["pending", "under_review", "clarification_requested"].includes(c.status)).length;
-  const newCount = commissions.filter((c) => c.status === "pending").length;
-  const unreadCount = commissions.reduce((total, c) => total + (c.unread_count || 0), 0);
-  const revisionsCount = commissions.filter((c) => c.status === "revision_requested").length;
-  const deliveryWork = commissions.filter((c) => ["paid", "in_progress", "revision_requested", "ready_for_delivery"].includes(c.status) && c.estimated_delivery_at);
-  const overdueCount = deliveryWork.filter((c) => new Date(c.estimated_delivery_at!).getTime() < now).length;
-  const upcomingCount = deliveryWork.filter((c) => {
-    const deadline = new Date(c.estimated_delivery_at!).getTime();
-    return deadline >= now && deadline < now + 7 * 24 * 60 * 60 * 1000;
-  }).length;
-  const awaitingQuoteCount = commissions.filter((c) => c.status === "quote_sent").length;
-  const approvedCount = commissions.filter((c) => ["approved", "payment_pending"].includes(c.status)).length;
-  const activeCount = commissions.filter((c) => ["paid", "in_progress", "revision_requested", "ready_for_delivery"].includes(c.status)).length;
+  const pendingCount = commissions.filter((c) => c.status === "pending").length;
+  const approvedCount = commissions.filter((c) => c.status === "approved").length;
+  const paidCommissions = commissions.filter((c) => c.status === "paid" || c.status === "fulfilled");
+  const totalRevenuePaise = paidCommissions.reduce((sum, c) => sum + (c.price || 0), 0);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -128,69 +95,33 @@ export default function AdminDashboardPage() {
         </div>
       </header>
 
-      {loadError && <div role="alert" className="border border-amber-500/30 p-4 text-sm text-amber-300">
-        Some dashboard data could not be loaded. Counts may be incomplete. <button type="button" onClick={() => setLoadAttempt((attempt) => attempt + 1)} className="underline">Retry</button>
-      </div>}
-
       {/* Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Link href="/admin/commissions?filter=pending" className="p-6 bg-surface-highest/5 border border-outline-variant/20 hover:border-primary">
-          <p className="font-sans text-[11px] uppercase tracking-widest text-muted">New Inquiries</p>
-          <p className="font-serif text-3xl text-amber-400 mt-3">{loading ? "..." : newCount}</p>
-          <p className="text-[11px] text-muted mt-1">Open new requests</p>
-        </Link>
-        <Link href="/admin/commissions?filter=unread" className="p-6 bg-surface-highest/5 border border-outline-variant/20 hover:border-primary">
-          <p className="font-sans text-[11px] uppercase tracking-widest text-muted">Unread Customer Updates</p>
-          <p className="font-serif text-3xl text-amber-400 mt-3">{loading ? "..." : unreadCount}</p>
-          <p className="text-[11px] text-muted mt-1">Open unread messages and inquiries</p>
-        </Link>
-        <Link href="/admin/commissions?filter=revision_requested" className="p-6 bg-surface-highest/5 border border-outline-variant/20 hover:border-primary">
-          <p className="font-sans text-[11px] uppercase tracking-widest text-muted">Revision Requests</p>
-          <p className="font-serif text-3xl text-amber-400 mt-3">{loading ? "..." : revisionsCount}</p>
-          <p className="text-[11px] text-muted mt-1">Open revisions</p>
-        </Link>
-        <Link href="/admin/commissions" className="p-6 bg-surface-highest/5 border border-outline-variant/20 hover:border-primary">
-          <p className="font-sans text-[11px] uppercase tracking-widest text-muted">Delivery Dates</p>
-          <p className="font-serif text-3xl text-amber-400 mt-3">{loading ? "..." : overdueCount}</p>
-          <p className="text-[11px] text-muted mt-1">Overdue · {loading ? "..." : upcomingCount} due within 7 days</p>
-        </Link>
-        <Link href="/admin/commissions" className="p-6 bg-surface-highest/5 border border-outline-variant/20 backdrop-blur-sm hover:border-primary">
-          <p className="font-sans text-[11px] uppercase tracking-widest text-muted">Awaiting Artist</p>
+        <div className="p-6 bg-surface-highest/5 border border-outline-variant/20 backdrop-blur-sm">
+          <p className="font-sans text-[11px] uppercase tracking-widest text-muted">Pending Review</p>
           <p className="font-serif text-3xl text-amber-400 mt-3 font-normal">{loading ? "..." : pendingCount}</p>
           <p className="font-sans text-[11px] text-muted mt-1">Requires quote or response</p>
-        </Link>
+        </div>
 
-        <Link href="/admin/commissions" className="p-6 bg-surface-highest/5 border border-outline-variant/20 backdrop-blur-sm hover:border-primary">
+        <div className="p-6 bg-surface-highest/5 border border-outline-variant/20 backdrop-blur-sm">
           <p className="font-sans text-[11px] uppercase tracking-widest text-muted">Approved & Awaiting Payment</p>
           <p className="font-serif text-3xl text-blue-400 mt-3 font-normal">{loading ? "..." : approvedCount}</p>
           <p className="font-sans text-[11px] text-muted mt-1">Token-gated 24h window</p>
-        </Link>
+        </div>
 
-        <Link href="/admin/payments" className="p-6 bg-surface-highest/5 border border-outline-variant/20 backdrop-blur-sm hover:border-primary">
-          <p className="font-sans text-[11px] uppercase tracking-widest text-muted">Net Revenue after Refunds</p>
+        <div className="p-6 bg-surface-highest/5 border border-outline-variant/20 backdrop-blur-sm">
+          <p className="font-sans text-[11px] uppercase tracking-widest text-muted">Total Acquired Revenue</p>
           <p className="font-serif text-3xl text-primary mt-3 font-normal">
-            {loading ? "..." : metrics ? formatRupees(metrics.net_revenue_paise) : "Unavailable"}
+            {loading ? "..." : formatRupees(totalRevenuePaise)}
           </p>
-          <p className="font-sans text-[11px] text-muted mt-1">Confirmed captures less processed refunds</p>
-        </Link>
+          <p className="font-sans text-[11px] text-muted mt-1">{paidCommissions.length} bespoke commissions paid</p>
+        </div>
 
-        <Link href="/admin/commissions?filter=quote_sent" className="p-6 bg-surface-highest/5 border border-outline-variant/20 backdrop-blur-sm hover:border-primary">
-          <p className="font-sans text-[11px] uppercase tracking-widest text-muted">Quotes Awaiting Reply</p>
-          <p className="font-serif text-3xl text-amber-300 mt-3 font-normal">{loading ? "..." : awaitingQuoteCount}</p>
-          <p className="font-sans text-[11px] text-primary mt-1">Open commission queue</p>
-        </Link>
-
-        <Link href="/admin/commissions" className="p-6 bg-surface-highest/5 border border-outline-variant/20 backdrop-blur-sm hover:border-primary">
-          <p className="font-sans text-[11px] uppercase tracking-widest text-muted">Active Production</p>
-          <p className="font-serif text-3xl text-emerald-300 mt-3 font-normal">{loading ? "..." : activeCount}</p>
-          <p className="font-sans text-[11px] text-primary mt-1">Open commission queue</p>
-        </Link>
-
-        <Link href="/admin/artworks" className="p-6 bg-surface-highest/5 border border-outline-variant/20 backdrop-blur-sm hover:border-primary">
-          <p className="font-sans text-[11px] uppercase tracking-widest text-muted">Published Artworks</p>
+        <div className="p-6 bg-surface-highest/5 border border-outline-variant/20 backdrop-blur-sm">
+          <p className="font-sans text-[11px] uppercase tracking-widest text-muted">Catalog Artworks</p>
           <p className="font-serif text-3xl text-text mt-3 font-normal">{loading ? "..." : artworksCount}</p>
           <p className="font-sans text-[11px] text-muted mt-1">Curated portfolio exhibits</p>
-        </Link>
+        </div>
       </div>
 
       {/* Recent Commissions Table */}

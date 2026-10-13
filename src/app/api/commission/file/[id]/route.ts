@@ -20,11 +20,9 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       return NextResponse.json({ message: "File unavailable." }, { status: 403 });
     }
     if (file.kind === "deliverable") {
-      const { data: releasedFile } = await admin.from("commission_files")
-        .select("delivered_at").eq("id", id).eq("commission_id", file.commission_id).maybeSingle();
       const { data: commission } = await admin.from("commissions")
         .select("status").eq("id", file.commission_id).maybeSingle();
-      if (!releasedFile?.delivered_at || !commission || !["delivered", "completed", "fulfilled", "revision_requested"].includes(commission.status)) {
+      if (!commission || !["delivered", "completed", "fulfilled", "revision_requested"].includes(commission.status)) {
         return NextResponse.json({ message: "Delivery is not available yet." }, { status: 403 });
       }
     }

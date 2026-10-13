@@ -32,7 +32,6 @@ async function until(check, label, timeout = 30000) {
     await sleep(200);
   }
   if (socket?.readyState === WebSocket.OPEN) {
-    console.log("Browser diagnostics", JSON.stringify({ exceptions, consoleErrors }));
     console.log("Timeout diagnostics", await pose(), await evaluate("({ focused:document.activeElement?.tagName, text:document.body.innerText.slice(-1500), visible:document.visibilityState })"));
     const screenshot = await send("Page.captureScreenshot");
     const screenshotPath = path.join(profile, "failure.png");
@@ -68,7 +67,7 @@ const inspect = `(() => {
       if (!fiber) continue;
       if (fiber.child) stack.push(fiber.child);
       if (fiber.sibling) stack.push(fiber.sibling);
-      if (fiber.memoizedProps?.playerPoseRef && Array.isArray(fiber.memoizedProps.artworks) && typeof fiber.memoizedProps.isModalOpen === 'boolean') {
+      if (fiber.type?.name === 'Controls') {
         for (let hook = fiber.memoizedState; hook; hook = hook.next) {
           const value = hook.memoizedState?.current;
           if (value?.isCamera) {
@@ -117,10 +116,6 @@ try {
     if (data.method === "Runtime.consoleAPICalled" && data.params.type === "error") {
       consoleErrors.push(data.params.args.map((arg) => arg.value || arg.description || "").join(" "));
     }
-  });
-  socket.addEventListener("close", () => {
-    for (const request of requests.values()) request.reject(new Error("Browser connection closed"));
-    requests.clear();
   });
   await send("Runtime.enable"); await send("Page.enable");
   await send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
@@ -315,9 +310,7 @@ try {
   assert.equal(exceptions.length, 0, `Uncaught browser exceptions: ${exceptions.join('; ')}`);
   console.log(JSON.stringify({ consoleErrors, desktopFinalPose: await pose(), profile }, null, 2));
 } finally {
-  if (socket?.readyState === WebSocket.OPEN) {
-    await Promise.race([send("Browser.close").catch(() => {}), sleep(2000)]);
-  }
+  if (socket?.readyState === WebSocket.OPEN) await send("Browser.close").catch(() => {});
   socket?.close();
   browser.kill();
 }

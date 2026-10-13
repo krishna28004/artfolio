@@ -19,8 +19,6 @@ import { Plant, Bench, PersonSilhouette } from "./Props";
 import { MuseumShell } from "./museum/MuseumShell";
 import { clampToWalkableBounds, VISITOR_BOUNDS } from "@/features/artwork/utils/exhibition-validation";
 import { artworks as staticArtworks } from "@/features/artwork/data/artworks";
-import { getMuseumSlot, MUSEUM_SLOTS } from "@/features/artwork/data/museum-slots";
-import { MUSEUM_ARTWORKS as CONFIG_MUSEUM_ARTWORKS } from "./config/museum.config";
 
 function WebGLCleanup() {
   const { gl } = useThree();
@@ -43,7 +41,6 @@ export interface GalleryArtwork {
   dimensions?: string;
   price?: number;
   isAvailable?: boolean;
-  wallIdentifier?: string;
   url: string;
   position: [number, number, number];
   rotation?: [number, number, number];
@@ -175,7 +172,128 @@ export const ARTWORKS: GalleryArtwork[] = [
  * Multi-Room Museum Shell Artwork Coordinates.
  * Maps the 10 artworks to their designated slots across the 6 galleries in museum.config.ts.
  */
-export const MUSEUM_ARTWORKS: GalleryArtwork[] = CONFIG_MUSEUM_ARTWORKS.map((art) => ({ ...art }));
+export const MUSEUM_ARTWORKS: GalleryArtwork[] = [
+  // 1. Featured Sanctuary Apex Slot (Room 6 — Crown Jewel Showcase)
+  {
+    id: "sorcerer-supreme",
+    title: "Sorcerer Supreme",
+    artist: "Krishna Kumar",
+    year: 2024,
+    medium: "Pencil on Paper",
+    dimensions: "A3 Sheet",
+    url: "/images/artworks/exhibition/sorcerer-supreme.jpg",
+    position: [0, 1.8, -35.85],
+    rotation: [0, 0, 0],
+  },
+  // 2. Grand Entrance Gallery (Room 1 — Orientation & Welcome)
+  {
+    id: "the-curious-mr-bean",
+    title: "The Curious Mr. Bean",
+    artist: "Krishna Kumar",
+    year: 2024,
+    medium: "Pencil on Paper",
+    dimensions: "A3 Sheet",
+    url: "/images/artworks/exhibition/the-curious-mr-bean.jpg",
+    position: [-7.85, 1.6, 24],
+    rotation: [0, Math.PI / 2, 0],
+  },
+  // 3. Main Exhibition Hall (Room 2 — West Wall Slot 1)
+  {
+    id: "luminous-veil",
+    title: "Luminous Veil",
+    artist: "Krishna Kumar",
+    year: 2024,
+    medium: "Pencil on Paper",
+    dimensions: "A3 Sheet",
+    url: "/images/artworks/exhibition/luminous-veil.jpg",
+    position: [-9.85, 1.6, 12],
+    rotation: [0, Math.PI / 2, 0],
+  },
+  // 4. Main Exhibition Hall (Room 2 — West Wall Slot 2)
+  {
+    id: "sovereign-gaze",
+    title: "Sovereign Gaze",
+    artist: "Krishna Kumar",
+    year: 2024,
+    medium: "Pencil on Paper",
+    dimensions: "A3 Sheet",
+    url: "/images/artworks/exhibition/sovereign-gaze.jpg",
+    position: [-9.85, 1.6, 0],
+    rotation: [0, Math.PI / 2, 0],
+  },
+  // 5. Main Exhibition Hall (Room 2 — East Wall Slot 1)
+  {
+    id: "the-dreamer",
+    title: "The Dreamer",
+    artist: "Krishna Kumar",
+    year: 2024,
+    medium: "Pencil on Paper",
+    dimensions: "A3 Sheet",
+    url: "/images/artworks/exhibition/the-dreamer.jpg",
+    position: [9.85, 1.6, 12],
+    rotation: [0, -Math.PI / 2, 0],
+  },
+  // 6. Main Exhibition Hall (Room 2 — East Wall Slot 2)
+  {
+    id: "behind-the-lens",
+    title: "Behind the Lens",
+    artist: "Krishna Kumar",
+    year: 2024,
+    medium: "Pencil on Paper",
+    dimensions: "A3 Sheet",
+    url: "/images/artworks/exhibition/behind-the-lens.jpg",
+    position: [9.85, 1.6, 0],
+    rotation: [0, -Math.PI / 2, 0],
+  },
+  // 7. West Gallery (Room 3 — Graphite Realism Salon Slot 1)
+  {
+    id: "monsoon-child",
+    title: "Monsoon Child",
+    artist: "Krishna Kumar",
+    year: 2024,
+    medium: "Pencil on Paper",
+    dimensions: "A3 Sheet",
+    url: "/images/artworks/exhibition/monsoon-child.jpg",
+    position: [-25.85, 1.6, 3],
+    rotation: [0, Math.PI / 2, 0],
+  },
+  // 8. West Gallery (Room 3 — Graphite Realism Salon Slot 2)
+  {
+    id: "tears-in-the-rain",
+    title: "Tears in the Rain",
+    artist: "Krishna Kumar",
+    year: 2024,
+    medium: "Pencil on Paper",
+    dimensions: "A3 Sheet",
+    url: "/images/artworks/exhibition/tears-in-the-rain.jpg",
+    position: [-25.85, 1.6, 9],
+    rotation: [0, Math.PI / 2, 0],
+  },
+  // 9. East Wing (Room 4 — Master Portraiture Salon Slot 1)
+  {
+    id: "radiant-spirit",
+    title: "Radiant Spirit",
+    artist: "Krishna Kumar",
+    year: 2024,
+    medium: "Pencil on Paper",
+    dimensions: "A3 Sheet",
+    url: "/images/artworks/exhibition/radiant-spirit.jpg",
+    position: [25.85, 1.6, 3],
+    rotation: [0, -Math.PI / 2, 0],
+  },
+  // 10. East Wing (Room 4 — Master Portraiture Salon Slot 2)
+  {
+    id: "chrome-elegy",
+    title: "Chrome Elegy",
+    artist: "Krishna Kumar",
+    year: 2024,
+    medium: "Pencil on Paper",
+    dimensions: "A3 Sheet",
+    url: "/images/artworks/exhibition/chrome-elegy.jpg",
+    position: [25.85, 1.6, 11],
+    rotation: [0, -Math.PI / 2, 0],
+  },
+];
 
 /* The clickable floor plane that handles double-click walk-to and mobile taps */
 function WalkableFloor() {
@@ -257,7 +375,7 @@ export function GalleryScene({
     const staticMap = new Map(staticArtworks.map((a) => [a.id, a]));
 
     if (useLegacyHall) {
-      const baseList = artworks ?? ARTWORKS;
+      const baseList = artworks && artworks.length > 0 ? artworks : ARTWORKS;
       return baseList.map((art) => {
         const staticData = staticMap.get(art.id);
         return {
@@ -272,14 +390,13 @@ export function GalleryScene({
     }
 
     // In Museum Shell mode, assign artworks to configured museum slots
-    const baseList = artworks ?? MUSEUM_ARTWORKS;
+    const baseList = artworks && artworks.length > 0 ? artworks : MUSEUM_ARTWORKS;
     const museumPosMap = new Map<string, GalleryArtwork>(
       MUSEUM_ARTWORKS.map((m) => [m.id, m])
     );
 
     return baseList.map((art) => {
       const slotMatch = museumPosMap.get(art.id);
-      const configuredSlot = getMuseumSlot(art.wallIdentifier) || MUSEUM_SLOTS.find((slot) => slot.initialArtworkId === art.id);
       const staticData = staticMap.get(art.id);
       return {
         ...art,
@@ -288,8 +405,8 @@ export function GalleryScene({
         isAvailable: art.isAvailable !== undefined ? art.isAvailable : staticData?.isAvailable,
         medium: art.medium || staticData?.medium,
         dimensions: art.dimensions || staticData?.dimensions,
-        position: configuredSlot?.position || art.position || slotMatch?.position,
-        rotation: configuredSlot?.rotation || art.rotation || slotMatch?.rotation,
+        position: slotMatch ? slotMatch.position : art.position,
+        rotation: slotMatch ? slotMatch.rotation : art.rotation,
       };
     });
   }, [artworks, useLegacyHall]);

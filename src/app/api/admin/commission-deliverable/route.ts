@@ -10,7 +10,7 @@ const EXTENSIONS: Record<string, string> = {
 };
 
 export async function POST(req: NextRequest) {
-  const auth = await verifyAdminAuth(req, { requireMfa: true });
+  const auth = await verifyAdminAuth(req);
   if (!auth.authorized) return NextResponse.json({ success: false, message: "Owner access required." }, { status: 401 });
   const form = await req.formData();
   const id = form.get("commissionId");

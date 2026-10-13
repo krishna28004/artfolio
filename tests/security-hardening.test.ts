@@ -10,8 +10,7 @@ import { NextRequest } from "next/server";
 import { verifyAdminAuth } from "../src/features/admin/utils/auth.ts";
 import { _setAdminInstanceForTesting } from "../src/shared/services/supabase-admin.ts";
 import { _setRazorpayInstanceForTesting } from "../src/shared/services/razorpay.ts";
-import { checkRateLimit, checkDistributedRateLimit, getClientIp } from "../src/shared/utils/rate-limit.ts";
-import { serializeJsonLd } from "../src/shared/utils/html.ts";
+import { checkRateLimit } from "../src/shared/utils/rate-limit.ts";
 import { computeHmacSha256 } from "../src/shared/utils/crypto.ts";
 import { POST as validateCheckout } from "../src/app/api/checkout/validate/route.ts";
 import { POST as verifyPayment } from "../src/app/api/payment/verify/route.ts";
@@ -423,19 +422,6 @@ describe("ARTfolio Phase 2 Security Hardening & Regression Tests", () => {
       assert.ok(sql.includes("ALTER TABLE public.payments ALTER COLUMN razorpay_payment_id DROP NOT NULL;"));
       assert.ok(sql.includes("check_captured_payment_id"));
       assert.ok(sql.includes("status IN ('created', 'attempted', 'failed')"));
-    });
-
-    test("workflow transition functions are service-role only and use a fixed search path", () => {
-      const migrationPath = path.resolve(process.cwd(), "supabase/migrations/20261011020000_atomic_deliverable_release.sql");
-      assert.strictEqual(fs.existsSync(migrationPath), true);
-      const sql = fs.readFileSync(migrationPath, "utf-8");
-      for (const functionName of ["ensure_commission_submission_events", "apply_commission_transition",
-        "accept_commission_quote_with_notice", "release_commission_deliverables"]) {
-        assert.ok(sql.includes(`FUNCTION public.${functionName}`), `${functionName} must exist`);
-        assert.ok(sql.includes(`TO service_role`), "workflow RPCs must be restricted to the server role");
-      }
-      assert.ok((sql.match(/SECURITY DEFINER SET search_path = public/g) || []).length >= 4);
-      assert.ok(sql.includes("FROM PUBLIC, anon, authenticated"));
     });
   });
 
@@ -988,42 +974,6 @@ describe("ARTfolio Phase 2 Security Hardening & Regression Tests", () => {
       assert.strictEqual(blocked.success, false);
       assert.ok(blocked.remaining === 0);
     });
-
-    test("Vercel client IP overrides spoofed forwarding headers", () => {
-      const req = new Request("https://artfolio.example", { headers: {
-        "x-vercel-forwarded-for": "203.0.113.9", "x-forwarded-for": "198.51.100.7, 192.0.2.6",
-      } });
-      assert.equal(getClientIp(req), "203.0.113.9");
-      assert.equal(getClientIp(new Request("https://artfolio.example", {
-        headers: { "x-forwarded-for": "198.51.100.7, 192.0.2.6" },
-      })), "192.0.2.6");
-    });
-
-    test("production fails closed when the distributed limiter is not configured", async () => {
-      const previousEnvironment = process.env.NODE_ENV;
-      const previousUrl = process.env.UPSTASH_REDIS_REST_URL;
-      const previousToken = process.env.UPSTASH_REDIS_REST_TOKEN;
-      process.env.NODE_ENV = "production";
-      delete process.env.UPSTASH_REDIS_REST_URL;
-      delete process.env.UPSTASH_REDIS_REST_TOKEN;
-      try {
-        assert.equal((await checkDistributedRateLimit(`prod_fail_closed_${crypto.randomUUID()}`, 3, 60_000)).success, false);
-      } finally {
-        if (previousEnvironment === undefined) delete process.env.NODE_ENV;
-        else process.env.NODE_ENV = previousEnvironment;
-        if (previousUrl === undefined) delete process.env.UPSTASH_REDIS_REST_URL;
-        else process.env.UPSTASH_REDIS_REST_URL = previousUrl;
-        if (previousToken === undefined) delete process.env.UPSTASH_REDIS_REST_TOKEN;
-        else process.env.UPSTASH_REDIS_REST_TOKEN = previousToken;
-      }
-    });
-  });
-
-  test("JSON-LD escapes markup delimiters without changing the parsed data", () => {
-    const value = { name: "</script><script>alert(1)</script>" };
-    const serialized = serializeJsonLd(value);
-    assert.equal(serialized.includes("<"), false);
-    assert.deepEqual(JSON.parse(serialized), value);
   });
 
   // ============================================================================

@@ -2,10 +2,9 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function updateSession(request: NextRequest) {
-  const isAuthPage = ["/admin/login", "/admin/recovery"].includes(request.nextUrl.pathname);
   // Guard: if env vars are missing, skip session update silently
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    if (request.nextUrl.pathname.startsWith('/admin') && !isAuthPage) {
+    if (request.nextUrl.pathname.startsWith('/admin') && !request.nextUrl.pathname.startsWith('/admin/login')) {
       return NextResponse.redirect(new URL('/admin/login', request.url));
     }
     return NextResponse.next({ request });
@@ -45,22 +44,19 @@ export async function updateSession(request: NextRequest) {
   ).toLowerCase().trim();
 
   const isAuthorizedAdmin =
-    Boolean(user && user.email_confirmed_at && adminEmail) && user?.email?.toLowerCase().trim() === adminEmail;
+    Boolean(user && adminEmail) && user?.email?.toLowerCase().trim() === adminEmail;
 
   if (
     !isAuthorizedAdmin &&
     request.nextUrl.pathname.startsWith('/admin') &&
-    !isAuthPage
+    !request.nextUrl.pathname.startsWith('/admin/login')
   ) {
     const url = request.nextUrl.clone()
     url.pathname = '/admin/login'
     return NextResponse.redirect(url)
   }
 
-  const assurance = isAuthorizedAdmin && request.nextUrl.pathname === '/admin/login'
-    ? await supabase.auth.mfa.getAuthenticatorAssuranceLevel() : null;
-  if (isAuthorizedAdmin && request.nextUrl.pathname === '/admin/login' &&
-      !assurance?.error && assurance?.data?.currentLevel === 'aal2') {
+  if (isAuthorizedAdmin && request.nextUrl.pathname === '/admin/login') {
     const url = request.nextUrl.clone()
     url.pathname = '/admin'
     return NextResponse.redirect(url)
