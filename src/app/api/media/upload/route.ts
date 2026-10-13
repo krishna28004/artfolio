@@ -1,3 +1,4 @@
+import { isCommissionIntakeEnabled } from "@/shared/utils/release-controls";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { getSupabaseAdmin } from "@/shared/services/supabase-admin";
@@ -20,6 +21,9 @@ export function validReferenceContent(bytes: Uint8Array, type: string): boolean 
 }
 
 export async function POST(req: NextRequest) {
+  if (!isCommissionIntakeEnabled()) return NextResponse.json({ success: false, message: "Reference uploads are temporarily paused." }, {
+    status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "3600" },
+  });
   try {
     const limit = await checkDistributedRateLimit(`commission_upload_${getClientIp(req)}`, 10, 60 * 60 * 1000);
     if (!limit.success) {

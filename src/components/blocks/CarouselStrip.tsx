@@ -46,10 +46,8 @@ export function CarouselStrip({ artworks }: CarouselStripProps) {
   const stripRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<(HTMLElement | null)[]>([]);
   const offsetRef = useRef(0);
-  const isHoverPausedRef = useRef(false);
   const isFocusPausedRef = useRef(false);
   const isManuallyPausedRef = useRef(false);
-  const resumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [config, setConfig] = useState<BreakpointConfig>(() => getConfig(1440));
 
   // Reduced-motion check
@@ -107,22 +105,6 @@ export function CarouselStrip({ artworks }: CarouselStripProps) {
     [config]
   );
 
-  // Pause / resume handlers for hover
-  const handleMouseEnter = useCallback(() => {
-    isHoverPausedRef.current = true;
-    if (resumeTimerRef.current) {
-      clearTimeout(resumeTimerRef.current);
-      resumeTimerRef.current = null;
-    }
-  }, []);
-
-  const handleMouseLeave = useCallback(() => {
-    if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
-    resumeTimerRef.current = setTimeout(() => {
-      isHoverPausedRef.current = false;
-    }, 300);
-  }, []);
-
   // Main animation loop
   useEffect(() => {
     if (reducedMotion || totalCards < 3) return;
@@ -138,8 +120,7 @@ export function CarouselStrip({ artworks }: CarouselStripProps) {
       // Prevent giant delta when returning from background tab
       const safeDelta = Math.min(delta, 0.1);
 
-      if (!isHoverPausedRef.current && !isFocusPausedRef.current &&
-          !isManuallyPausedRef.current && !document.hidden) {
+      if (!isFocusPausedRef.current && !isManuallyPausedRef.current && !document.hidden) {
         offsetRef.current -= config.speed * safeDelta;
 
         // Seamless reset: when we've scrolled one full set, reset
@@ -205,8 +186,6 @@ export function CarouselStrip({ artworks }: CarouselStripProps) {
       {/* The carousel track container — overflow hidden with padding for perspective */}
       <div
         className={`w-full py-4 ${reducedMotion || totalCards < 3 ? "overflow-x-auto" : "overflow-hidden"}`}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
         onFocusCapture={() => { isFocusPausedRef.current = true; }}
         onBlurCapture={(event) => {
           if (!event.currentTarget.contains(event.relatedTarget)) isFocusPausedRef.current = false;

@@ -198,7 +198,7 @@ describe("Virtual Exhibition — 3D Geometry, Validation & Architecture Tests", 
   });
 
   describe("Database Mapping Fallback (mapDbArtworkToDomain)", () => {
-    test("merges curated 3D positions if database row lacks position_3d", () => {
+    test("uses the museum slot when database coordinates are absent", () => {
       const mockDbRow = {
         id: "luminous-veil",
         title: "Luminous Veil (Custom Title)",
@@ -215,14 +215,25 @@ describe("Virtual Exhibition — 3D Geometry, Validation & Architecture Tests", 
         display_order: 1,
         position_3d: null, // DB missing 3D coordinates
         rotation_3d: null,
-        wall_identifier: null,
+        wall_identifier: "main-west-1",
       };
 
       const domain = mapDbArtworkToDomain(mockDbRow as unknown as Parameters<typeof mapDbArtworkToDomain>[0]);
       assert.ok(domain.position3D);
-      assert.deepStrictEqual(domain.position3D, [-24.92, 2.1, -28]);
+      assert.deepStrictEqual(domain.position3D, [-9.85, 1.6, 12]);
       assert.deepStrictEqual(domain.rotation3D, [0, Math.PI / 2, 0]);
-      assert.strictEqual(domain.wallIdentifier, "west-wall-1");
+      assert.strictEqual(domain.wallIdentifier, "main-west-1");
+    });
+
+    test("an unassigned database artwork does not inherit a demo placement", () => {
+      const domain = mapDbArtworkToDomain({
+        id: "luminous-veil", title: "Luminous Veil", artist: "Krishna Kumar", year: 2024,
+        image_url: "/images/artworks/luminous-veil.jpg", image_urls: [],
+        is_available: true, sale_status: "available", position_3d: null,
+        rotation_3d: null, wall_identifier: null,
+      } as unknown as Parameters<typeof mapDbArtworkToDomain>[0]);
+      assert.equal(domain.position3D, undefined);
+      assert.equal(domain.wallIdentifier, undefined);
     });
 
     test("preserves valid custom database 3D positions if provided", () => {

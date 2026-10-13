@@ -42,7 +42,7 @@ test("guest acceptance records the exact quote through one atomic RPC", async ()
   const response = await customerAction(fixture.request());
   assert.equal(response.status, 200);
   const call = fixture.getCall();
-  assert.equal(call?.name, "accept_commission_quote");
+  assert.equal(call?.name, "accept_commission_quote_with_notice");
   assert.equal(call?.args.p_commission_id, fixture.id);
   assert.equal(call?.args.p_quote_version, 3);
   assert.match(String(call?.args.p_checkout_token_hash), /^[0-9a-f]{64}$/);

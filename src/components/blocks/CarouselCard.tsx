@@ -45,7 +45,7 @@ export function CarouselCard({
         alt={isClone ? "" : `${artwork.title} by ${artwork.artist}`}
         fill
         sizes={`${cardWidth}px`}
-        className="relative z-10 object-cover transition-transform duration-[800ms] ease-editorial"
+        className="relative z-10 object-cover transition-transform duration-[250ms] ease-out group-hover:scale-[1.025]"
         placeholder="blur"
         blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
         priority={priority}

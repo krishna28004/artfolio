@@ -13,6 +13,7 @@ import { uploadPrivateReference, type PrivateReferenceClaim } from "@/shared/ser
 
 interface CommissionFormProps {
   initialReference?: string;
+  acceptingRequests?: boolean;
 }
 
 const SCALE_OPTIONS = [
@@ -29,7 +30,7 @@ const BUDGET_OPTIONS = [
   { id: "undisclosed", label: "Undisclosed", subtitle: "Custom Scope" },
 ];
 
-export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
+export function CommissionForm({ initialReference = "", acceptingRequests = false }: CommissionFormProps) {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submittedId, setSubmittedId] = useState("");
   const [uploadState, setUploadState] = useState<"idle" | "uploading" | "done" | "error">("idle");
@@ -78,6 +79,7 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
 
   const processUpload = useCallback(
     async (file: File) => {
+      if (!acceptingRequests) { setServerError("New commissions are temporarily paused."); return; }
       if (!["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(file.type)) {
         setServerError("Please upload a JPG, PNG, WebP, or PDF file.");
         setUploadState("error");
@@ -110,7 +112,7 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
         setServerError(error instanceof Error ? error.message : "Failed to upload reference file.");
       }
     },
-    [setValue]
+    [setValue, acceptingRequests]
   );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -137,6 +139,7 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
   };
 
   const onSubmit = async (data: CommissionFormData) => {
+    if (!acceptingRequests) { setServerError("New commissions are temporarily paused."); return; }
     setServerError("");
     const maxRetries = 3;
     let attempt = 0;
@@ -220,6 +223,7 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
         isSubmitting ? "opacity-50 pointer-events-none" : "opacity-100"
       }`}
     >
+      {!acceptingRequests && <p role="status" className="border border-primary/30 px-4 py-3 text-sm text-muted">New commissions are temporarily paused. Existing collectors can continue using their private tracking links.</p>}
       {/* 1. Patron Details: Name + Email (2 cols desktop, 1 col mobile) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
         <div className="flex flex-col">
@@ -267,6 +271,7 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
         <input
           ref={fileInputRef}
           type="file"
+                disabled={!acceptingRequests}
           accept="image/jpeg,image/png,image/webp,application/pdf"
           multiple
           onChange={handleFileChange}
@@ -283,7 +288,8 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
         {referenceFiles.length < 5 && (
           <div
             role="button"
-            tabIndex={0}
+            tabIndex={acceptingRequests ? 0 : -1}
+            aria-disabled={!acceptingRequests}
             aria-label="Upload reference material. Drag and drop files or press Enter to browse."
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
@@ -460,7 +466,7 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
       <div className="flex flex-col gap-4 pt-2">
         <button
           type="submit"
-          disabled={isSubmitting || uploadState === "uploading"}
+          disabled={!acceptingRequests || isSubmitting || uploadState === "uploading"}
           className="w-full py-4 bg-[#F5F2EB] hover:bg-[#E8E0D2] active:bg-[#C5A880] text-[#0C0C0E] font-sans font-medium text-[12px] tracking-[0.24em] uppercase transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm flex items-center justify-center gap-2 cursor-pointer group"
         >
           {isSubmitting ? (

@@ -14,6 +14,7 @@ interface CommissionItem {
   price: number | null;
   created_at: string;
   expires_at: string | null;
+  unread_count: number;
 }
 
 export default function AdminCommissionsQueuePage() {
@@ -22,10 +23,17 @@ export default function AdminCommissionsQueuePage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const initial = new URLSearchParams(window.location.search).get("filter");
+    if (initial && ["unread", "pending", "revision_requested", "quote_sent", "payment_pending"].includes(initial)) {
+      queueMicrotask(() => setFilter(initial));
+    }
+  }, []);
+
+  useEffect(() => {
     async function fetchCommissions() {
       setLoading(true);
       try {
-        const url = filter === "all" ? "/api/admin/commissions" : `/api/admin/commissions?status=${filter}`;
+        const url = filter === "all" || filter === "unread" ? "/api/admin/commissions" : `/api/admin/commissions?status=${filter}`;
         const res = await fetch(url);
         if (res.ok) {
           const data = await res.json();
@@ -45,13 +53,24 @@ export default function AdminCommissionsQueuePage() {
 
   const filterTabs = [
     { id: "all", label: "All Inquiries" },
+    { id: "unread", label: "Unread" },
     { id: "pending", label: "Pending Review" },
+    { id: "under_review", label: "Under Review" },
+    { id: "clarification_requested", label: "Needs Reply" },
+    { id: "quote_sent", label: "Awaiting Quote Reply" },
     { id: "approved", label: "Approved" },
+    { id: "payment_pending", label: "Payment Pending" },
     { id: "paid", label: "Paid" },
+    { id: "in_progress", label: "In Production" },
+    { id: "revision_requested", label: "Revisions" },
+    { id: "ready_for_delivery", label: "Ready to Deliver" },
+    { id: "delivered", label: "Delivered" },
+    { id: "completed", label: "Completed" },
     { id: "fulfilled", label: "Fulfilled" },
     { id: "rejected", label: "Rejected" },
     { id: "expired", label: "Expired" },
   ];
+  const visibleCommissions = filter === "unread" ? commissions.filter((c) => c.unread_count > 0) : commissions;
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -109,7 +128,7 @@ export default function AdminCommissionsQueuePage() {
           <div className="py-20 text-center text-muted font-sans text-xs tracking-widest uppercase">
             Loading Queue...
           </div>
-        ) : commissions.length === 0 ? (
+        ) : visibleCommissions.length === 0 ? (
           <div className="py-20 text-center text-muted font-sans text-xs tracking-widest uppercase">
             No inquiries match &ldquo;{filter}&rdquo;.
           </div>
@@ -127,10 +146,10 @@ export default function AdminCommissionsQueuePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant/10 text-text">
-                {commissions.map((c) => (
+                {visibleCommissions.map((c) => (
                   <tr key={c.id} className="hover:bg-surface-highest/10 transition-colors">
                     <td className="py-4 px-4">
-                      <div className="font-medium text-text">{c.name}</div>
+                      <div className="font-medium text-text">{c.name} {c.unread_count > 0 && <span className="ml-2 text-amber-300" aria-label={`${c.unread_count} unread customer updates`}>· {c.unread_count} new</span>}</div>
                       <div className="text-muted text-[11px]">{c.email}</div>
                     </td>
                     <td className="py-4 px-4 text-muted uppercase tracking-wider">{c.size}</td>

@@ -17,7 +17,10 @@ export default function ExhibitionPage() {
   const [showWalkHint, setShowWalkHint] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showHUD, setShowHUD] = useState(false);
-  const [dbArtworks, setDbArtworks] = useState<GalleryArtwork[] | undefined>(undefined);
+  const [dbArtworks, setDbArtworks] = useState<GalleryArtwork[]>([]);
+  const [artworksLoaded, setArtworksLoaded] = useState(false);
+  const [exhibitionError, setExhibitionError] = useState("");
+  const [draftPreview, setDraftPreview] = useState(false);
   const [focusedArtwork, setFocusedArtwork] = useState<GalleryArtwork | null>(null);
   const [selectedArtworkModal, setSelectedArtworkModal] = useState<GalleryArtwork | null>(null);
   const [isPointerLocked, setIsPointerLocked] = useState(false);
@@ -46,12 +49,14 @@ export default function ExhibitionPage() {
   // Fetch artwork data with robust 3D placement validation
   useEffect(() => {
     let isMounted = true;
-    fetch("/api/artworks")
-      .then((res) => res.json())
+    const preview = new URLSearchParams(window.location.search).get("preview") === "draft";
+    fetch(preview ? "/api/admin/artworks?view=exhibition-preview" : "/api/artworks?exhibition=1")
+      .then((res) => { if (!res.ok) throw new Error("Exhibition is unavailable."); return res.json(); })
       .then((data) => {
         if (isMounted && data.success && Array.isArray(data.data)) {
+          setDraftPreview(preview);
           const formatted: GalleryArtwork[] = (data.data as Artwork[])
-            .filter((a) => isValid3DPosition(a.position3D) && a.isAvailable !== false)
+            .filter((a) => isValid3DPosition(a.position3D))
             .map((a) => ({
               id: a.id,
               title: a.title,
@@ -62,14 +67,18 @@ export default function ExhibitionPage() {
               url: a.textureUrl || a.imageUrl,
               position: a.position3D as [number, number, number],
               rotation: (a.rotation3D as [number, number, number]) || [0, 0, 0],
+              wallIdentifier: a.wallIdentifier,
             }));
-          if (formatted.length > 0) {
-            setDbArtworks(formatted);
-          }
+          setDbArtworks(formatted);
+          setExhibitionError("");
         }
       })
       .catch((err) => {
-        console.warn("[EXHIBITION_API] Using curated static exhibition catalog:", err);
+        console.warn("[EXHIBITION_API] Exhibition unavailable:", err);
+        if (isMounted) setExhibitionError(preview ? "Sign in as the owner to preview draft placements." : "The exhibition is temporarily unavailable.");
+      })
+      .finally(() => {
+        if (isMounted) setArtworksLoaded(true);
       });
 
     return () => {
@@ -240,6 +249,10 @@ export default function ExhibitionPage() {
           onPointerLockChange={setIsPointerLocked}
         />
       </ExhibitionErrorBoundary>
+      {artworksLoaded && (exhibitionError || dbArtworks.length === 0 || draftPreview) &&
+        <div className="absolute top-5 left-1/2 -translate-x-1/2 z-30 max-w-[90vw] border border-primary/30 bg-black/80 px-5 py-3 text-center text-xs text-primary backdrop-blur-sm" role={exhibitionError ? "alert" : "status"}>
+          {exhibitionError || (draftPreview ? "Owner preview · draft wall placements" : "The exhibition currently has no displayed artworks.")}
+        </div>}
 
       {/* ========== HUD (shown after entering) ========== */}
       {entered && (

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
+import { getClientIp } from "@/shared/utils/rate-limit";
 import { getSupabaseAdmin } from "@/shared/services/supabase-admin";
 
 /**
@@ -7,8 +8,7 @@ import { getSupabaseAdmin } from "@/shared/services/supabase-admin";
  * Never stores or logs raw IP addresses.
  */
 function hashClientIp(req: NextRequest): string {
-  const forwarded = req.headers.get("x-forwarded-for");
-  const rawIp = forwarded ? forwarded.split(",")[0].trim() : req.headers.get("x-real-ip") || "127.0.0.1";
+  const rawIp = getClientIp(req);
   const salt = process.env.TELEMETRY_SALT || process.env.VIEW_TELEMETRY_SALT || process.env.SUPABASE_SERVICE_ROLE_KEY || "artfolio-telemetry-salt";
   return crypto.createHash("sha256").update(`${rawIp}:${salt}`).digest("hex");
 }

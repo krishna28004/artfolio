@@ -302,7 +302,8 @@ CREATE OR REPLACE FUNCTION public.accept_commission_quote(
 DECLARE c public.commissions%ROWTYPE; new_event_id uuid;
 BEGIN
   SELECT * INTO c FROM public.commissions WHERE id = p_commission_id FOR UPDATE;
-  IF NOT FOUND OR c.status <> 'quote_sent' OR c.quote_version <> p_quote_version OR
+  IF NOT FOUND OR p_quote_version IS NULL OR p_checkout_token_hash IS NULL OR p_expires_at IS NULL OR
+     c.status <> 'quote_sent' OR c.quote_version <> p_quote_version OR
      c.quote_version < 1 OR c.price IS NULL OR c.price <= 0 OR
      c.quote_scope IS NULL OR c.quote_terms IS NULL OR
      p_checkout_token_hash !~ '^[0-9a-f]{64}$' OR

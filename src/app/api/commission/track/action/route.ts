@@ -6,7 +6,7 @@ import { acceptedQuoteCheckoutToken } from "@/features/commission/server/checkou
 import { getSupabaseAdmin } from "@/shared/services/supabase-admin";
 import { checkDistributedRateLimit, getClientIp } from "@/shared/utils/rate-limit";
 import type { Database, CommissionStatus } from "@/types/supabase";
-import { queueCommissionNotice, deliverPendingNotifications } from "@/features/commission/server/notifications";
+import { deliverPendingNotifications } from "@/features/commission/server/notifications";
 
 const schema = z.object({
   id: z.string().uuid(),
@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
   const commission = await authorizeCustomer(req, id);
   if (!commission) return NextResponse.json({ success: false, message: "Private request unavailable." }, { status: 403 });
   const admin = getSupabaseAdmin();
+  const ownerEmail = process.env.ADMIN_NOTIFICATION_EMAIL || process.env.ADMIN_EMAIL || null;
   const now = new Date().toISOString();
   const messageRequired = ["message", "request_clarification", "request_revision", "delivery_issue", "request_refund"].includes(action);
   if (messageRequired && (!body || body.length < 3)) {
@@ -73,36 +74,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, message: "This request is closed." }, { status: 409 });
   }
 
-  let eventId: string;
   if (action === "accept_quote") {
-    const { data, error } = await admin.rpc("accept_commission_quote", {
+    const { data, error } = await admin.rpc("accept_commission_quote_with_notice", {
       p_commission_id: id, p_quote_version: commission.quote_version,
       p_checkout_token_hash: update.checkout_token_hash!, p_expires_at: update.expires_at!,
+      p_owner_recipient: ownerEmail,
     });
     if (error || !data) return NextResponse.json({ success: false, message: "Quote changed. Refresh and try again." }, { status: 409 });
-    eventId = data;
   } else {
-    if (nextStatus) {
-      update.status = nextStatus;
-      const { data, error } = await admin.from("commissions").update(update)
-        .eq("id", id).eq("status", commission.status).eq("quote_version", commission.quote_version)
-        .select("id").maybeSingle();
-      if (error || !data) return NextResponse.json({ success: false, message: "Request changed. Refresh and try again." }, { status: 409 });
+    const eventType = action === "request_revision" ? "revision_requested" : action;
+    const { data, error } = await admin.rpc("apply_commission_transition", {
+      p_commission_id: id, p_expected_status: commission.status,
+      p_quote_version: commission.quote_version, p_next_status: nextStatus,
+      p_action: eventType, p_actor_type: "customer", p_actor: "customer",
+      p_body: body || null, p_metadata: {}, p_changes: {},
+      p_notify_recipient: ownerEmail, p_notify_audience: "owner",
+    });
+    if (error || !data) {
+      console.error("[CUSTOMER_TRANSITION_ERROR]", error?.message || "No event returned");
+      return NextResponse.json({ success: false, message: "Request changed or the update could not be saved. Refresh and try again." }, { status: 409 });
     }
-    const { data: event, error: eventError } = await admin.from("commission_events").insert({
-      commission_id: id, actor_type: "customer", event_type: action === "request_revision" ? "revision_requested" : action,
-      body: body || null, metadata: {},
-    }).select("id").single();
-    if (eventError || !event) {
-      console.error("[CUSTOMER_EVENT_ERROR]", eventError);
-      return NextResponse.json({ success: false, message: "Update saved, but history recording failed. Contact the studio." }, { status: 503 });
-    }
-    eventId = event.id;
   }
-  const ownerEmail = process.env.ADMIN_NOTIFICATION_EMAIL || process.env.ADMIN_EMAIL;
-  if (ownerEmail) {
-    await queueCommissionNotice(id, eventId, ownerEmail, "owner");
-    if (process.env.RESEND_API_KEY) await deliverPendingNotifications(1).catch((cause) => console.error("[CUSTOMER_NOTICE_ERROR]", cause));
-  }
+  if (ownerEmail && process.env.RESEND_API_KEY) await deliverPendingNotifications(1).catch((cause) => console.error("[CUSTOMER_NOTICE_ERROR]", cause));
   return NextResponse.json({ success: true });
 }

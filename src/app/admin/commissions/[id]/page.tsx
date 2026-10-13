@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState, use, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { formatRupees } from "@/shared/utils/money";
@@ -12,6 +12,14 @@ interface PaymentRecord {
   amount: number;
   status: string;
   created_at: string;
+}
+
+interface QuoteTemplate {
+  id: string;
+  title: string;
+  scope: string;
+  terms: string;
+  revision_allowance: number;
 }
 
 interface CommissionDetail {
@@ -61,6 +69,17 @@ export default function AdminCommissionDetailPage({
   const [revisions, setRevisions] = useState("1");
   const [studioMessage, setStudioMessage] = useState("");
   const [deliverable, setDeliverable] = useState<File | null>(null);
+  const [templates, setTemplates] = useState<QuoteTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [templateTitle, setTemplateTitle] = useState("");
+
+  const loadTemplates = useCallback(async () => {
+    try {
+      const response = await fetch("/api/admin/quote-templates", { cache: "no-store" });
+      const result = await response.json();
+      if (response.ok && result.success && Array.isArray(result.data)) setTemplates(result.data);
+    } catch { /* Quote entry remains available without a template list. */ }
+  }, []);
 
   useEffect(() => {
     async function loadCommission() {
@@ -79,6 +98,13 @@ export default function AdminCommissionDetailPage({
             setQuoteScope(data.data.quote_scope || "");
             setQuoteTerms(data.data.quote_terms || "");
             setRevisions(String(data.data.revision_allowance ?? 1));
+            if (data.data.estimated_delivery_at) {
+              setDeliveryDate(data.data.estimated_delivery_at.slice(0, 10));
+            }
+            if (data.readThrough) void fetch(`/api/admin/commissions/${commissionId}`, {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ seenThrough: data.readThrough }),
+            });
           }
         }
       } catch (err) {
@@ -89,7 +115,54 @@ export default function AdminCommissionDetailPage({
     }
 
     loadCommission();
-  }, [commissionId]);
+    queueMicrotask(() => void loadTemplates());
+  }, [commissionId, loadTemplates]);
+
+  const applyTemplate = (id: string) => {
+    setSelectedTemplateId(id);
+    const template = templates.find((item) => item.id === id);
+    if (!template) return;
+    setTemplateTitle(template.title);
+    setQuoteScope(template.scope);
+    setQuoteTerms(template.terms);
+    setRevisions(String(template.revision_allowance));
+  };
+
+  const saveTemplate = async () => {
+    setActionLoading(true); setActionFeedback(null);
+    try {
+      const response = await fetch("/api/admin/quote-templates", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selectedTemplateId || undefined, title: templateTitle.trim(),
+          scope: quoteScope.trim(), terms: quoteTerms.trim(), revisionAllowance: Number(revisions) }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Could not save template.");
+      setSelectedTemplateId(result.data.id);
+      setActionFeedback({ type: "success", message: "Quote template saved. Review the current price and delivery date before sending a quote." });
+      await loadTemplates();
+    } catch (cause) {
+      setActionFeedback({ type: "error", message: cause instanceof Error ? cause.message : "Could not save template." });
+    } finally { setActionLoading(false); }
+  };
+
+  const deleteTemplate = async () => {
+    if (!selectedTemplateId || !window.confirm("Permanently delete this quote template?")) return;
+    setActionLoading(true); setActionFeedback(null);
+    try {
+      const response = await fetch("/api/admin/quote-templates", {
+        method: "DELETE", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selectedTemplateId }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Could not delete template.");
+      setSelectedTemplateId(""); setTemplateTitle("");
+      setActionFeedback({ type: "success", message: "Quote template deleted." });
+      await loadTemplates();
+    } catch (cause) {
+      setActionFeedback({ type: "error", message: cause instanceof Error ? cause.message : "Could not delete template." });
+    } finally { setActionLoading(false); }
+  };
 
   const handleApprove = async () => {
     if (!window.confirm("Send this quote and terms to the customer for acceptance?")) return;
@@ -330,6 +403,22 @@ export default function AdminCommissionDetailPage({
               <p className="font-sans text-muted text-xs">
                 Set the complete scope and terms. The customer must explicitly accept this quote before checkout opens.
               </p>
+
+              <div className="border border-outline-variant/20 p-4 space-y-3">
+                <h3 className="font-serif text-lg text-text">Reusable quote template</h3>
+                <p className="text-xs text-muted">Templates fill scope, terms, and included revisions. Price and delivery date stay specific to this request.</p>
+                <label htmlFor="quote-template" className="block text-xs text-muted">Choose a template</label>
+                <select id="quote-template" value={selectedTemplateId} onChange={(event) => applyTemplate(event.target.value)} className="w-full bg-surface-lowest border border-outline-variant/30 p-2 text-text">
+                  <option value="">New template / none</option>
+                  {templates.map((template) => <option key={template.id} value={template.id}>{template.title}</option>)}
+                </select>
+                <label htmlFor="template-title" className="block text-xs text-muted">Template name</label>
+                <input id="template-title" maxLength={100} value={templateTitle} onChange={(event) => setTemplateTitle(event.target.value)} className="w-full bg-surface-lowest border border-outline-variant/30 p-2 text-text" />
+                <div className="flex flex-wrap gap-3">
+                  <button type="button" disabled={actionLoading || !templateTitle.trim()} onClick={() => void saveTemplate()} className="border border-primary px-3 py-2 text-xs text-primary disabled:opacity-50">{selectedTemplateId ? "Update template" : "Save as template"}</button>
+                  {selectedTemplateId && <button type="button" disabled={actionLoading} onClick={() => void deleteTemplate()} className="border border-red-500/30 px-3 py-2 text-xs text-red-300 disabled:opacity-50">Delete template</button>}
+                </div>
+              </div>
 
               <div className="space-y-4">
                 <div>

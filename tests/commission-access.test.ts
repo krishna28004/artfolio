@@ -92,3 +92,41 @@ test("customer B cannot obtain a signed URL for customer A's private file", asyn
   assert.equal(response.status, 403);
   assert.equal(signedUrlCalls, 0);
 });
+
+test("customer cannot download a deliverable until that file is explicitly released", async () => {
+  const commissionId = crypto.randomUUID();
+  const fileId = crypto.randomUUID();
+  const token = makeTrackingToken("release-check");
+  let signedUrlCalls = 0;
+  process.env.ADMIN_EMAIL = "";
+  process.env.ADMIN_API_SECRET = "";
+  process.env.ADMIN_API_KEY = "";
+  _setAdminInstanceForTesting({
+    from(table: string) {
+      const query = {
+        filters: [] as Array<[string, string]>,
+        select() { return this; },
+        eq(field: string, value: string) { this.filters.push([field, value]); return this; },
+        async maybeSingle() {
+          if (table === "commission_files" && this.filters.length === 1) {
+            return { data: { id: fileId, commission_id: commissionId,
+              kind: "deliverable", storage_path: `deliveries/${commissionId}/${fileId}.pdf` }, error: null };
+          }
+          if (table === "commission_files") return { data: { delivered_at: null }, error: null };
+          if (table === "commissions" && this.filters[0]?.[0] === "id") {
+            return { data: { id: commissionId, tracking_token_hash: hashAccessToken(token), status: "revision_requested" }, error: null };
+          }
+          return { data: null, error: null };
+        },
+      };
+      return query;
+    },
+    storage: { from() { signedUrlCalls++; throw new Error("unreleased file must not be signed"); } },
+  } as never);
+  const req = new NextRequest(`http://localhost:3000/api/commission/file/${fileId}?commissionId=${commissionId}`, {
+    headers: { cookie: `${accessCookieName(commissionId)}=${hashAccessToken(token)}` },
+  });
+  const response = await downloadPrivateFile(req, { params: Promise.resolve({ id: fileId }) });
+  assert.equal(response.status, 403);
+  assert.equal(signedUrlCalls, 0);
+});

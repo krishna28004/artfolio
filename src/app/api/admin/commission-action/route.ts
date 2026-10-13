@@ -4,7 +4,7 @@ import crypto from "node:crypto";
 import { verifyAdminAuth } from "@/features/admin/utils/auth";
 import { getSupabaseAdmin } from "@/shared/services/supabase-admin";
 import { makeTrackingToken } from "@/features/commission/server/tracking-token";
-import { queueCommissionNotice, deliverPendingNotifications } from "@/features/commission/server/notifications";
+import { deliverPendingNotifications } from "@/features/commission/server/notifications";
 import type { Database } from "@/types/supabase";
 
 const schema = z.object({
@@ -20,7 +20,7 @@ const schema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const auth = await verifyAdminAuth(req);
+  const auth = await verifyAdminAuth(req, { requireMfa: true });
   if (!auth.authorized) return NextResponse.json({ success: false, message: "Owner access required." }, { status: 401 });
   const origin = req.headers.get("origin");
   if (auth.source === "session" && origin && origin !== new URL(req.url).origin) {
@@ -99,32 +99,36 @@ export async function POST(req: NextRequest) {
     update.tracking_token_rotated_at = new Date().toISOString();
   }
   if (nextStatus) update.status = nextStatus;
-  if (nextStatus || action === "rotate_token") {
-    const { data: changed, error: updateError } = await admin.from("commissions")
-      .update(update).eq("id", id).eq("status", commission.status)
-      .eq("quote_version", commission.quote_version).select("id").maybeSingle();
-    if (updateError || !changed) return NextResponse.json({ success: false, message: "Commission changed concurrently. Refresh first." }, { status: 409 });
-  }
-  const { data: event, error: eventError } = await admin.from("commission_events").insert({
-    commission_id: id, actor_type: "owner", event_type: action === "send_quote" ? "quote_sent" : action,
-    body: body || null,
-    metadata: action === "send_quote" ? { quote_version: commission.quote_version + 1,
-      price: update.price!, scope: parsed.data.scope!, terms: parsed.data.terms!,
-      estimated_delivery_at: parsed.data.estimatedDeliveryAt!, revision_allowance: parsed.data.revisionAllowance! } : {},
-  }).select("id").single();
-  if (eventError || !event) {
-    console.error("[OWNER_EVENT_ERROR]", eventError);
-    return NextResponse.json({ success: false, message: "Status saved but history write failed; inspect this request." }, { status: 503 });
-  }
   if (action === "deliver") {
-    const { error: deliveryError } = await admin.from("commission_files")
-      .update({ delivered_at: new Date().toISOString() }).eq("commission_id", id).eq("kind", "deliverable");
-    if (deliveryError) console.error("[DELIVERY_FILE_MARK_ERROR]", deliveryError);
+    const { data, error: releaseError } = await admin.rpc("release_commission_deliverables", {
+      p_commission_id: id, p_actor: auth.userEmail || "owner", p_body: body || null,
+    });
+    if (releaseError || !data) {
+      console.error("[DELIVERABLE_RELEASE_ERROR]", releaseError?.message || "No event returned");
+      return NextResponse.json({ success: false, message: "Delivery could not be released. Refresh and try again." }, { status: 409 });
+    }
+  } else {
+    const metadata = action === "send_quote" ? { quote_version: commission.quote_version + 1,
+      price: update.price!, scope: parsed.data.scope!, terms: parsed.data.terms!,
+      estimated_delivery_at: parsed.data.estimatedDeliveryAt!, revision_allowance: parsed.data.revisionAllowance! } : {};
+    const changes = { ...update } as Record<string, unknown>;
+    delete changes.status;
+    delete changes.updated_at;
+    if (action === "send_quote") changes.quote_version = commission.quote_version + 1;
+    const { data, error: transitionError } = await admin.rpc("apply_commission_transition", {
+      p_commission_id: id, p_expected_status: commission.status,
+      p_quote_version: commission.quote_version, p_next_status: nextStatus,
+      p_action: action === "send_quote" ? "quote_sent" : action,
+      p_actor_type: "owner", p_actor: auth.userEmail || "owner", p_body: body || null,
+      p_metadata: metadata, p_changes: changes as never,
+      p_notify_recipient: commission.email || null, p_notify_audience: "customer",
+    });
+    if (transitionError || !data) {
+      console.error("[OWNER_TRANSITION_ERROR] Commission transition RPC failed or returned no event.");
+      return NextResponse.json({ success: false, message: "Commission changed or the update could not be saved. Refresh and try again." }, { status: 409 });
+    }
   }
-  await admin.from("audit_logs").insert({ actor: auth.userEmail || "owner", action,
-    target_type: "commission", target_id: id, metadata: { event_id: event.id } });
   if (commission.email) {
-    await queueCommissionNotice(id, event.id, commission.email, "customer");
     if (process.env.RESEND_API_KEY) await deliverPendingNotifications(1).catch((cause) => console.error("[OWNER_NOTICE_ERROR]", cause));
   }
   return NextResponse.json({ success: true, trackingToken: rawToken });

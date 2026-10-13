@@ -69,33 +69,57 @@ try {
   await send("Runtime.enable");
   await send("Page.enable");
   for (const viewport of [{ name: "desktop", width: 1440, height: 900, mobile: false },
+    { name: "tablet", width: 820, height: 1180, mobile: false },
     { name: "mobile", width: 390, height: 844, mobile: true }]) {
     await send("Emulation.setDeviceMetricsOverride", {
       width: viewport.width, height: viewport.height, deviceScaleFactor: 1, mobile: viewport.mobile,
     });
     await send("Page.navigate", { url: `${appUrl}/commission` });
-    await until(() => evaluate("!!document.querySelector('#patron-name')"), `${viewport.name} commission form`);
+    await until(() => evaluate("document.readyState === 'complete' && !!document.querySelector('#patron-name') && document.querySelector('form')?.innerText.includes('References are stored privately')"), `${viewport.name} complete commission form`);
     const page = await evaluate(`({ heading:document.querySelector('h1')?.textContent,
       overflow:document.documentElement.scrollWidth > innerWidth + 2,
       hasPrivacyNotice:document.body.innerText.includes('References are stored privately'),
-      hasSubmit:!!document.querySelector('button[type=submit]') })`);
+      hasSubmit:!!document.querySelector('button[type=submit]'),
+      paused:!!document.querySelector('button[type=submit]')?.disabled && document.body.innerText.includes('New commissions are temporarily paused') })`);
     assert.match(page.heading, /Commission a Piece/);
     assert.equal(page.overflow, false, `${viewport.name} horizontal overflow`);
     assert.equal(page.hasPrivacyNotice, true);
     assert.equal(page.hasSubmit, true);
-    if (viewport.name === "desktop") {
+    if (viewport.name === "desktop" && !page.paused) {
       await click("button[type=submit]");
       await until(() => evaluate("document.body.innerText.includes('Name must be at least 2 characters')"), "inline validation");
       assert.equal(await evaluate("!!document.querySelector('#patron-name')"), true);
+    }
+    if (page.paused) {
+      assert.equal(await evaluate("document.querySelector('input[type=file]')?.disabled"), true);
+      console.log(viewport.name + ": intake is explicitly paused, submit and reference input disabled");
     }
     const screenshot = await send("Page.captureScreenshot", { captureBeyondViewport: true });
     const output = path.join(profile, `commission-${viewport.name}.png`);
     writeFileSync(output, Buffer.from(screenshot.data, "base64"));
     console.log(`${viewport.name}: form rendered, responsive width, privacy notice; screenshot ${output}`);
   }
+  for (const viewport of [{ name: "desktop", width: 1440, height: 900, mobile: false },
+    { name: "tablet", width: 820, height: 1180, mobile: false },
+    { name: "mobile", width: 390, height: 844, mobile: true }]) {
+    await send("Emulation.setDeviceMetricsOverride", { width: viewport.width, height: viewport.height, deviceScaleFactor: 1, mobile: viewport.mobile });
+    for (const route of ["/admin/login", "/admin/recovery"]) {
+      await send("Page.navigate", { url: appUrl + route });
+      await until(() => evaluate("!!document.querySelector('input[type=email]')"), viewport.name + route);
+      assert.equal(await evaluate("document.documentElement.scrollWidth > innerWidth + 2"), false, viewport.name + route + " overflow");
+      assert.ok(await evaluate("!!document.querySelector('label') && !!document.querySelector('button')"));
+      console.log(viewport.name + ": " + route + " renders labelled form without horizontal overflow");
+    }
+  }
+  await send("Page.navigate", { url: appUrl + "/admin" });
+  await until(() => evaluate("location.pathname === '/admin/login'"), "unauthenticated admin redirect");
+  console.log("Unauthenticated admin redirects to sign-in");
   assert.deepEqual(errors, [], `Browser console/runtime errors: ${errors.join(" | ")}`);
   console.log("Browser console/runtime errors: 0");
 } finally {
   socket?.close();
   browser.kill();
 }
+
+// Bound the Windows CDP shutdown after successful checks.
+setTimeout(() => process.exit(0), 500);

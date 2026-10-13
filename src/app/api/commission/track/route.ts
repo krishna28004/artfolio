@@ -27,7 +27,8 @@ export async function GET(req: NextRequest) {
       `/checkout/${id}?token=${encodeURIComponent(checkoutToken)}` : null;
   const { tracking_token_hash: _trackingHash, checkout_token_hash: _checkoutHash, ...visibleCommission } = commission;
   void _trackingHash; void _checkoutHash;
-  return NextResponse.json({ success: true, commission: visibleCommission, events, files, checkoutUrl }, {
+  const customerFiles = (files || []).filter((file) => file.kind !== "deliverable" || file.delivered_at !== null);
+  return NextResponse.json({ success: true, commission: visibleCommission, events, files: customerFiles, checkoutUrl }, {
     headers: { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" },
   });
 }
