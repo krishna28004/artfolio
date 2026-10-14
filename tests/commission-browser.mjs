@@ -74,16 +74,22 @@ try {
       width: viewport.width, height: viewport.height, deviceScaleFactor: 1, mobile: viewport.mobile,
     });
     await send("Page.navigate", { url: `${appUrl}/commission` });
-    await until(() => evaluate("!!document.querySelector('#patron-name')"), `${viewport.name} commission form`);
+    await until(() => evaluate("!!document.querySelector('#patron-name, [role=status]')"), `${viewport.name} commission state`);
     const page = await evaluate(`({ heading:document.querySelector('h1')?.textContent,
       overflow:document.documentElement.scrollWidth > innerWidth + 2,
       hasPrivacyNotice:document.body.innerText.includes('References are stored privately'),
-      hasSubmit:!!document.querySelector('button[type=submit]') })`);
+      hasSubmit:!!document.querySelector('button[type=submit]'),
+      paused:document.querySelector('[role=status]')?.textContent?.includes('Requests are paused') || false })`);
     assert.match(page.heading, /Commission a Piece/);
     assert.equal(page.overflow, false, `${viewport.name} horizontal overflow`);
-    assert.equal(page.hasPrivacyNotice, true);
-    assert.equal(page.hasSubmit, true);
-    if (viewport.name === "desktop") {
+    if (page.paused) {
+      assert.equal(page.hasSubmit, false, `${viewport.name} paused intake has no submit control`);
+      assert.equal(await evaluate("!!document.querySelector('#patron-name')"), false);
+    } else {
+      assert.equal(page.hasPrivacyNotice, true);
+      assert.equal(page.hasSubmit, true);
+    }
+    if (viewport.name === "desktop" && !page.paused) {
       await click("button[type=submit]");
       await until(() => evaluate("document.body.innerText.includes('Name must be at least 2 characters')"), "inline validation");
       assert.equal(await evaluate("!!document.querySelector('#patron-name')"), true);
@@ -91,7 +97,11 @@ try {
     const screenshot = await send("Page.captureScreenshot", { captureBeyondViewport: true });
     const output = path.join(profile, `commission-${viewport.name}.png`);
     writeFileSync(output, Buffer.from(screenshot.data, "base64"));
-    console.log(`${viewport.name}: form rendered, responsive width, privacy notice; screenshot ${output}`);
+    console.log(`${viewport.name}: ${page.paused ? 'paused intake' : 'form'} and responsive width passed; screenshot ${output}`);
+  }
+  if (await evaluate("document.querySelector('[role=status]')?.textContent?.includes('Requests are paused') || false")) {
+    const intake = await fetch(`${appUrl}/api/commission`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    assert.equal(intake.status, 503, "paused intake is enforced server-side");
   }
   assert.deepEqual(errors, [], `Browser console/runtime errors: ${errors.join(" | ")}`);
   console.log("Browser console/runtime errors: 0");

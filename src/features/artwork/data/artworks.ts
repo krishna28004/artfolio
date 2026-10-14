@@ -5,6 +5,7 @@ export interface Artwork {
   year: number;
   description: string;
   imageUrl: string;
+  imageUrls?: string[];
   thumbnailUrl?: string;
   textureUrl?: string;
   medium: string;
@@ -12,6 +13,7 @@ export interface Artwork {
   price?: number;
   category?: string;
   isAvailable: boolean;
+  saleStatus?: "available" | "reserved" | "sold" | "not_for_sale";
   position3D?: [number, number, number];
   rotation3D?: [number, number, number];
   wallIdentifier?: string;

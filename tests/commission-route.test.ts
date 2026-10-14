@@ -10,7 +10,9 @@ import { escapeHtml } from "../src/shared/utils/html.ts";
 const rows = new Map<string, Record<string, unknown>>();
 process.env.SUPABASE_SERVICE_ROLE_KEY = "unit-test-only-service-secret";
 let insertFailure: string | null = null;
+let eventFailure = false;
 const db = {
+  async rpc(name: string) { assert.equal(name, "ensure_commission_submission_events"); return eventFailure ? { data: null, error: { code: "TEST" } } : { data: crypto.randomUUID(), error: null }; },
   from(table: string) {
     if (table === "commission_events") return { insert() { return { select() { return { single: async () => ({ data: { id: crypto.randomUUID() }, error: null }) }; } }; } };
     if (table === "notification_jobs") return { upsert: async () => ({ error: null }) };
@@ -53,6 +55,7 @@ afterEach(() => {
   _setAdminInstanceForTesting(null);
   rows.clear();
   insertFailure = null;
+  eventFailure = false;
 });
 
 test("submission returns a persistent reference and identical retry returns the same one", async () => {
@@ -105,4 +108,14 @@ test("legacy direct upload signing is unavailable", async () => {
 test("customer-authored content is escaped before inclusion in HTML email", () => {
   assert.equal(escapeHtml('<img src="x" onerror=\'alert(1)\'>&'),
     "&lt;img src=&quot;x&quot; onerror=&#39;alert(1)&#39;&gt;&amp;");
+});
+
+test("an outbox failure is retryable and does not report submission success", async () => {
+  _setAdminInstanceForTesting(db as any);
+  eventFailure = true;
+  assert.equal((await submit(payload("pending-event-key"))).status, 503);
+  assert.equal(rows.size, 1);
+  eventFailure = false;
+  assert.equal((await submit(payload("pending-event-key"))).status, 200);
+  assert.equal(rows.size, 1);
 });

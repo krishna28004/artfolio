@@ -1,25 +1,18 @@
+import { logSecurityFailure } from "@/shared/utils/security-log";
+import { isCommissionIntakeEnabled } from "@/shared/utils/release-controls";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { getSupabaseAdmin } from "@/shared/services/supabase-admin";
 import { checkDistributedRateLimit, getClientIp } from "@/shared/utils/rate-limit";
+import { validReferenceContent } from "@/features/commission/server/file-content";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const CONTENT_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
 
-export function validReferenceContent(bytes: Uint8Array, type: string): boolean {
-  if (bytes.length < 12) return false;
-  switch (type) {
-    case "image/jpeg": return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
-    case "image/png": return [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
-      .every((value, index) => bytes[index] === value);
-    case "image/webp": return String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" &&
-      String.fromCharCode(...bytes.slice(8, 12)) === "WEBP";
-    case "application/pdf": return String.fromCharCode(...bytes.slice(0, 5)) === "%PDF-";
-    default: return false;
-  }
-}
-
 export async function POST(req: NextRequest) {
+  if (!isCommissionIntakeEnabled()) return NextResponse.json({ success: false, message: "New commissions are temporarily paused. Please check back later." }, {
+    status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "3600" },
+  });
   try {
     const limit = await checkDistributedRateLimit(`commission_upload_${getClientIp(req)}`, 10, 60 * 60 * 1000);
     if (!limit.success) {
@@ -54,7 +47,7 @@ export async function POST(req: NextRequest) {
     const { error: storageError } = await admin.storage.from("commission-private")
       .upload(path, bytes, { contentType: file.type.toLowerCase(), upsert: false });
     if (storageError) {
-      console.error("[PRIVATE_UPLOAD_STORAGE_ERROR]", storageError);
+      logSecurityFailure("[PRIVATE_UPLOAD_STORAGE_ERROR]", storageError);
       return NextResponse.json({ success: false, message: "Private file storage is unavailable." }, { status: 503 });
     }
     const fileName = file.name.replace(/[\\/\x00-\x1f]/g, "_").slice(0, 180) || `reference.${extension}`;
@@ -65,12 +58,12 @@ export async function POST(req: NextRequest) {
     });
     if (dbError) {
       await admin.storage.from("commission-private").remove([path]);
-      console.error("[PRIVATE_UPLOAD_RECORD_ERROR]", dbError);
+      logSecurityFailure("[PRIVATE_UPLOAD_RECORD_ERROR]", dbError);
       return NextResponse.json({ success: false, message: "Could not record private upload." }, { status: 503 });
     }
     return NextResponse.json({ success: true, data: { id, token, name: fileName, size: bytes.length } });
   } catch (error) {
-    console.error("[PRIVATE_UPLOAD_FATAL]", error);
+    logSecurityFailure("[PRIVATE_UPLOAD_FATAL]", error);
     return NextResponse.json({ success: false, message: "Private upload could not be completed." }, { status: 500 });
   }
 }

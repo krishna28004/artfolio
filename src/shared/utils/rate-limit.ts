@@ -1,4 +1,6 @@
+import { logSecurityFailure } from "@/shared/utils/security-log";
 import { Ratelimit } from "@upstash/ratelimit";
+import { isIP } from "node:net";
 import { Redis } from "@upstash/redis";
 
 interface RateLimitRecord {
@@ -89,10 +91,11 @@ export function checkRateLimit(
   return { success: false, remaining: 0, resetMs };
 }
 
-let upstashRatelimitInstance: Ratelimit | null = null;
+const upstashPolicies = new Map<string, Ratelimit>();
 
-function getUpstashRatelimit(): Ratelimit | null {
-  if (upstashRatelimitInstance) return upstashRatelimitInstance;
+function getUpstashRatelimit(limit: number, windowMs: number): Ratelimit | null {
+  const policy = limit + ":" + windowMs;
+  if (upstashPolicies.has(policy)) return upstashPolicies.get(policy)!;
 
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -103,21 +106,23 @@ function getUpstashRatelimit(): Ratelimit | null {
 
   try {
     const redis = new Redis({ url, token });
-    upstashRatelimitInstance = new Ratelimit({
+    const instance = new Ratelimit({
       redis,
-      limiter: Ratelimit.slidingWindow(5, "15 m"),
-      analytics: true,
-      prefix: "artfolio_rate_limit",
+      limiter: Ratelimit.slidingWindow(limit, (windowMs + " ms") as Parameters<typeof Ratelimit.slidingWindow>[1]),
+      analytics: false,
+      prefix: "artfolio_rate_limit:" + policy,
     });
-    return upstashRatelimitInstance;
+    if (upstashPolicies.size >= 64) upstashPolicies.clear();
+    upstashPolicies.set(policy, instance);
+    return instance;
   } catch (err) {
-    console.error("[UPSTASH_INIT_FAIL] Could not initialize Upstash Redis:", err);
+    logSecurityFailure("[UPSTASH_INIT_FAIL] Could not initialize Upstash Redis:", err);
     return null;
   }
 }
 
 /**
- * Distributed rate limiter with graceful fallback to bounded in-memory token bucket.
+ * Distributed rate limiter; production fails closed, local tests use bounded memory.
  * Uses Upstash Redis in serverless production and bounded in-memory storage locally.
  */
 export async function checkDistributedRateLimit(
@@ -125,7 +130,7 @@ export async function checkDistributedRateLimit(
   limit = 5,
   windowMs = 15 * 60 * 1000
 ): Promise<RateLimitResult> {
-  const upstash = getUpstashRatelimit();
+  const upstash = getUpstashRatelimit(limit, windowMs);
 
   if (upstash) {
     try {
@@ -136,10 +141,11 @@ export async function checkDistributedRateLimit(
         resetMs: result.reset - Date.now(),
       };
     } catch (redisErr) {
-      console.warn("[UPSTASH_UNAVAILABLE] Redis query failed, falling back to local rate limiter:", redisErr);
+      logSecurityFailure("[UPSTASH_UNAVAILABLE] Redis query failed, falling back to local rate limiter:", redisErr);
     }
   }
 
+  if (process.env.NODE_ENV === "production") return { success: false, remaining: 0, resetMs: Math.min(windowMs, 60_000) };
   return checkRateLimit(key, limit, windowMs);
 }
 
@@ -147,9 +153,12 @@ export async function checkDistributedRateLimit(
  * Helper to extract client IP address safely from standard headers.
  */
 export function getClientIp(req: Request): string {
-  const forwarded = req.headers.get("x-forwarded-for");
-  if (forwarded) {
-    return forwarded.split(",")[0].trim();
+  if (process.env.NODE_ENV === "production") {
+    // Trusted only behind Vercel ingress. Other hosts need an audited adapter;
+    // a shared key prevents arbitrary forwarded headers from bypassing limits.
+    const ip = process.env.VERCEL === "1" ? req.headers.get("x-vercel-forwarded-for")?.trim() : null;
+    return ip && isIP(ip) ? ip : "untrusted-client";
   }
-  return req.headers.get("x-real-ip") || "127.0.0.1";
+  const candidate = req.headers.get("x-forwarded-for")?.split(",")[0].trim() || req.headers.get("x-real-ip")?.trim();
+  return candidate && isIP(candidate) ? candidate : "127.0.0.1";
 }

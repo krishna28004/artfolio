@@ -1,3 +1,5 @@
+import { logSecurityFailure } from "@/shared/utils/security-log";
+import { isPaymentCheckoutEnabled } from "@/shared/utils/release-controls";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import crypto from "crypto";
@@ -12,6 +14,9 @@ const createOrderSchema = z.object({
 });
 
 export async function POST(req: Request) {
+  if (!isPaymentCheckoutEnabled()) return NextResponse.json({ success: false, message: "Checkout is temporarily unavailable. Please try again later." }, {
+    status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "3600" },
+  });
   try {
     const rawBody = await req.json();
     const parseResult = createOrderSchema.safeParse(rawBody);
@@ -33,7 +38,7 @@ export async function POST(req: Request) {
       .single();
 
     if (dbError || !commission) {
-      console.error("[ORDER_LOOKUP_FATAL] Commission lookup failed:", dbError);
+      logSecurityFailure("[ORDER_LOOKUP_FATAL] Commission lookup failed:", dbError);
       return NextResponse.json(
         { success: false, message: "Commission record not found." },
         { status: 404 }
@@ -131,7 +136,7 @@ export async function POST(req: Request) {
     // 5. Financial Integrity Check (Strict positive integer paise)
     const pricePaise = commission.price;
     if (!isPositivePaise(pricePaise)) {
-      console.error(`[ORDER_PRICE_FATAL] Invalid price in database for commission ${commissionId}:`, pricePaise);
+      logSecurityFailure(`[ORDER_PRICE_FATAL] Invalid price in database for commission ${commissionId}:`, pricePaise);
       return NextResponse.json(
         { success: false, message: "Commission pricing is uninitialized or invalid." },
         { status: 400 }
@@ -165,7 +170,7 @@ export async function POST(req: Request) {
       p_commission_id: commissionId, p_order_id: order.id, p_amount: pricePaise, p_currency: "INR",
     });
     if (attachError || !attachedOrderId) {
-      console.error("[ORDER_ATTACH_ERROR]", attachError);
+      logSecurityFailure("[ORDER_ATTACH_ERROR]", attachError);
       return NextResponse.json({ success: false, message: "Checkout order could not be recorded. Please retry." }, { status: 503 });
     }
     if (attachedOrderId !== order.id) {
@@ -183,7 +188,7 @@ export async function POST(req: Request) {
       currency: "INR",
     });
   } catch (error) {
-    console.error("[CREATE_ORDER_FATAL]", error);
+    logSecurityFailure("[CREATE_ORDER_FATAL]", error);
     return NextResponse.json(
       { success: false, message: "Secure transaction could not be initialized." },
       { status: 500 }

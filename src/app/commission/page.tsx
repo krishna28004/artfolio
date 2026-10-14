@@ -1,3 +1,4 @@
+import { isCommissionIntakeEnabled } from "@/shared/utils/release-controls";
 import { CommissionForm } from "@/components/commission/CommissionForm";
 
 interface PageProps {
@@ -25,7 +26,7 @@ export default async function CommissionPage({ searchParams }: PageProps) {
         </header>
 
         {/* Minimal Premium Commission Form */}
-        <CommissionForm initialReference={artworkRef} />
+        <CommissionForm initialReference={artworkRef} acceptingRequests={isCommissionIntakeEnabled()} />
       </div>
     </main>
   );

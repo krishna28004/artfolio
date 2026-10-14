@@ -291,19 +291,4 @@ INSERT INTO public.artworks (
     '[0, 0, 0]'::jsonb,
     'north'
 )
-ON CONFLICT (id) DO UPDATE SET
-    title = EXCLUDED.title,
-    artist = EXCLUDED.artist,
-    year = EXCLUDED.year,
-    description = EXCLUDED.description,
-    medium = EXCLUDED.medium,
-    dimensions = EXCLUDED.dimensions,
-    category = EXCLUDED.category,
-    image_url = EXCLUDED.image_url,
-    is_available = EXCLUDED.is_available,
-    is_featured = EXCLUDED.is_featured,
-    display_order = EXCLUDED.display_order,
-    position_3d = EXCLUDED.position_3d,
-    rotation_3d = EXCLUDED.rotation_3d,
-    wall_identifier = EXCLUDED.wall_identifier,
-    updated_at = timezone('utc'::text, now());
+ON CONFLICT (id) DO NOTHING;

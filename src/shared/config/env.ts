@@ -1,3 +1,4 @@
+import "server-only";
 function validateEnv(key: string, defaultValue?: string): string {
   const value = process.env[key] || defaultValue;
 

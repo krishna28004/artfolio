@@ -1,10 +1,11 @@
+import { logSecurityFailure } from "@/shared/utils/security-log";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/shared/services/supabase-admin";
 import { verifyAdminAuth } from "@/features/admin/utils/auth";
 
 export async function GET(
   req: NextRequest,
-  context: { params: Promise<{ id: string }> | { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const authResult = await verifyAdminAuth(req);
@@ -43,7 +44,7 @@ export async function GET(
     return NextResponse.json({ success: true, data: { ...visible, files: files || [], events: events || [], refunds: refunds || [] } },
       { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    console.error("[ADMIN_COMMISSION_DETAIL_FATAL]", error);
+    logSecurityFailure("[ADMIN_COMMISSION_DETAIL_FATAL]", error);
     return NextResponse.json({ success: false, message: "Internal server error." }, { status: 500 });
   }
 }

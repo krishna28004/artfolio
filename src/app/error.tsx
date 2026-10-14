@@ -17,10 +17,10 @@ export default function Error({
     useEffect(() => {
         // Telemetry hook: Capture structured error payload (Sentry/Datadog ready)
         const errorPayload = {
-            message: error.message,
-            stack: error.stack,
+
+
             digest: error.digest,
-            url: typeof window !== 'undefined' ? window.location.href : '',
+
             timestamp: new Date().toISOString()
         };
         console.error("[CRITICAL] Boundary Exception Escaped:", errorPayload);
@@ -42,7 +42,7 @@ export default function Error({
                 <div className="text-center max-w-lg mx-auto">
                     <h2 className="font-serif text-[36px] text-text mb-4">A Structural Error Occurred</h2>
                     <p className="font-sans text-[15px] text-muted mb-10 leading-relaxed">
-                        The platform encountered an unexpected anomaly. Our engineers have been notified.
+                        The platform encountered an unexpected problem. Please try again shortly.
                         You may attempt to reload the interface or return safely to the exhibition.
                     </p>
                     <div className="flex flex-col sm:flex-row justify-center gap-4">

@@ -43,7 +43,7 @@ interface CommissionDetail {
 export default function AdminCommissionDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }> | { id: string };
+  params: Promise<{ id: string }>;
 }) {
   const resolvedParams = use(Promise.resolve(params));
   const commissionId = resolvedParams.id;

@@ -1,9 +1,12 @@
 import { MetadataRoute } from "next";
-import { getAllArtworks } from "@/features/artwork/services/artwork-service";
+import { getArtworkCatalog } from "@/features/artwork/services/artwork-service";
+
+// Artwork publication changes independently of deployments. Generate routes at
+// request time so a temporary catalog outage cannot fail the production build.
+export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://artfolio.luxury";
-  const artworks = await getAllArtworks();
 
   const staticRoutes: MetadataRoute.Sitemap = [
     {
@@ -38,7 +41,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   ];
 
-  const artworkRoutes: MetadataRoute.Sitemap = artworks.map((art) => ({
+  const catalog = await getArtworkCatalog();
+  const artworkRoutes: MetadataRoute.Sitemap = catalog.artworks.map((art) => ({
     url: `${baseUrl}/artwork/${art.id}`,
     lastModified: new Date(),
     changeFrequency: "monthly",

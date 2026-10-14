@@ -16,6 +16,7 @@ interface ArtworkAdminItem {
   image_url: string;
   display_order: number;
   is_available: boolean;
+  publication_status: "draft" | "published" | "archived";
   wall_identifier: string | null;
 }
 
@@ -58,7 +59,7 @@ export default function AdminArtworksPage() {
       const res = await fetch(`/api/admin/artworks/${art.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isAvailable: !art.is_available }),
+        body: JSON.stringify({ publicationStatus: art.publication_status === "published" ? "archived" : "published" }),
       });
       if (res.ok) {
         await fetchArtworks();
@@ -138,12 +139,12 @@ export default function AdminArtworksPage() {
                     <td className="py-4 px-4">
                       <span
                         className={`inline-block px-2.5 py-1 text-[10px] uppercase tracking-widest border ${
-                          art.is_available
+                          art.publication_status === "published"
                             ? "bg-emerald-950/40 text-emerald-400 border-emerald-600/30"
                             : "bg-neutral-900 text-neutral-400 border-neutral-700/30"
                         }`}
                       >
-                        {art.is_available ? "Active" : "Archived"}
+                        {art.publication_status === "published" ? "Published" : art.publication_status}
                       </span>
                     </td>
                     <td className="py-4 px-4 text-right space-x-2">
@@ -154,9 +155,9 @@ export default function AdminArtworksPage() {
                       >
                         {actionId === art.id
                           ? "..."
-                          : art.is_available
+                          : art.publication_status === "published"
                           ? "Archive"
-                          : "Restore"}
+                          : "Publish"}
                       </button>
                       <Link
                         href={`/artwork/${art.id}`}

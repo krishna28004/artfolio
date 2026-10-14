@@ -42,6 +42,7 @@ type CommissionEventRow = {
   event_type: string; body: string | null; metadata: Json; created_at: string;
 };
 type PaymentEventRow = {
+  provider_event_id: string | null;
   event_id: string; event_type: string; commission_id: string | null; payment_id: string | null;
   amount: number | null; currency: string | null; state: "received" | "processed" | "ignored" | "failed";
   error_code: string | null; received_at: string; processed_at: string | null;
@@ -102,11 +103,15 @@ export interface Database {
           price: number | null; // Stored in integer paise (INR)
           category: string | null;
           image_url: string;
+          image_urls: string[];
+          publication_status: "draft" | "published" | "archived";
+          sale_status: "available" | "reserved" | "sold" | "not_for_sale";
           thumbnail_url: string | null;
           texture_url: string | null;
           position_3d: Json | null;
           rotation_3d: Json | null;
           wall_identifier: string | null;
+          draft_wall_identifier: string | null;
           display_order: number;
           is_available: boolean;
           is_featured: boolean;
@@ -124,11 +129,15 @@ export interface Database {
           price?: number | null;
           category?: string | null;
           image_url: string;
+          image_urls?: string[];
+          publication_status?: "draft" | "published" | "archived";
+          sale_status?: "available" | "reserved" | "sold" | "not_for_sale";
           thumbnail_url?: string | null;
           texture_url?: string | null;
           position_3d?: Json | null;
           rotation_3d?: Json | null;
           wall_identifier?: string | null;
+          draft_wall_identifier?: string | null;
           display_order?: number;
           is_available?: boolean;
           is_featured?: boolean;
@@ -146,17 +155,33 @@ export interface Database {
           price?: number | null;
           category?: string | null;
           image_url?: string;
+          image_urls?: string[];
+          publication_status?: "draft" | "published" | "archived";
+          sale_status?: "available" | "reserved" | "sold" | "not_for_sale";
           thumbnail_url?: string | null;
           texture_url?: string | null;
           position_3d?: Json | null;
           rotation_3d?: Json | null;
           wall_identifier?: string | null;
+          draft_wall_identifier?: string | null;
           display_order?: number;
           is_available?: boolean;
           is_featured?: boolean;
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
+      };
+      exhibition_settings: {
+        Row: { id: string; is_published: boolean; updated_at: string };
+        Insert: { id: string; is_published?: boolean; updated_at?: string };
+        Update: { id?: string; is_published?: boolean; updated_at?: string };
+        Relationships: [];
+      };
+      quote_templates: {
+        Row: { id: string; title: string; scope: string; terms: string; revision_allowance: number; created_at: string; updated_at: string };
+        Insert: { id?: string; title: string; scope: string; terms: string; revision_allowance?: number; created_at?: string; updated_at?: string };
+        Update: { id?: string; title?: string; scope?: string; terms?: string; revision_allowance?: number; created_at?: string; updated_at?: string };
         Relationships: [];
       };
       commissions: {
@@ -179,6 +204,7 @@ export interface Database {
           quote_terms: string | null;
           estimated_delivery_at: string | null;
           revision_allowance: number;
+          owner_last_seen_at: string | null;
           size: string;
           budget: string;
           deadline: string | null;
@@ -215,6 +241,7 @@ export interface Database {
           quote_terms?: string | null;
           estimated_delivery_at?: string | null;
           revision_allowance?: number;
+          owner_last_seen_at?: string | null;
           size: string;
           budget: string;
           deadline?: string | null;
@@ -251,6 +278,7 @@ export interface Database {
           quote_terms?: string | null;
           estimated_delivery_at?: string | null;
           revision_allowance?: number;
+          owner_last_seen_at?: string | null;
           size?: string;
           budget?: string;
           deadline?: string | null;
@@ -395,6 +423,13 @@ export interface Database {
       [_ in never]: never;
     };
     Functions: {
+      commission_unread_counts: { Args: Record<string, never>; Returns: { commission_id: string; unread_count: number }[] };
+      mark_commission_owner_read: { Args: { p_commission_id: string; p_seen_through: string }; Returns: string | null };
+      set_exhibition_publication: {
+        Args: { p_publish: boolean; p_actor: string };
+        Returns: boolean;
+      };
+      is_owner_session_active: { Args: { p_session_id: string; p_user_id: string }; Returns: boolean };
       commission_business_metrics: { Args: Record<string, never>; Returns: Json };
       attach_commission_order: {
         Args: { p_commission_id: string; p_order_id: string; p_amount: number; p_currency: string };
@@ -418,6 +453,26 @@ export interface Database {
       attach_commission_references: {
         Args: { p_commission_id: string; p_claims: Json };
         Returns: number;
+      };
+      release_commission_deliverables: {
+        Args: { p_commission_id: string; p_actor: string; p_body?: string | null };
+        Returns: string;
+      };
+      apply_commission_transition: {
+        Args: { p_commission_id: string; p_expected_status: string; p_quote_version: number;
+          p_next_status: string | null; p_action: string; p_actor_type: string; p_actor: string;
+          p_body: string | null; p_metadata: Json; p_changes?: Json;
+          p_notify_recipient?: string | null; p_notify_audience?: string | null };
+        Returns: string;
+      };
+      ensure_commission_submission_events: {
+        Args: { p_commission_id: string; p_owner_recipient?: string | null };
+        Returns: string;
+      };
+      accept_commission_quote_with_notice: {
+        Args: { p_commission_id: string; p_quote_version: number; p_checkout_token_hash: string;
+          p_expires_at: string; p_owner_recipient?: string | null };
+        Returns: string;
       };
     };
     Enums: {

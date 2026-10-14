@@ -3,6 +3,8 @@ import path from "node:path";
 import fs from "node:fs";
 
 export async function resolve(specifier, context, nextResolve) {
+  if (specifier === "server-only") return { url: "data:text/javascript,export {};", shortCircuit: true };
+  if (specifier === "next/cache") return { url: "data:text/javascript,export function revalidatePath() {};", shortCircuit: true };
   if (specifier === "next/server") {
     return nextResolve("next/server.js", context);
   }

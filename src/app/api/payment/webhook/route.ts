@@ -1,3 +1,4 @@
+import { logSecurityFailure } from "@/shared/utils/security-log";
 import { NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { getSupabaseAdmin } from "@/shared/services/supabase-admin";
@@ -22,17 +23,27 @@ export async function POST(req: Request) {
     }
     const event = JSON.parse(body) as GatewayEvent;
     const eventType = event.event || "unknown";
-    const eventId = req.headers.get("x-razorpay-event-id") || event.id ||
-      `body_${crypto.createHash("sha256").update(body).digest("hex")}`;
+    // The provider ID header is not covered by the body HMAC. Use signed,
+    // immutable financial fields for deduplication; retain its ID for diagnostics only.
+    const paymentEntity = event.payload?.payment?.entity;
+    const refundEntity = event.payload?.refund?.entity;
+    const fingerprint = ["payment.captured", "payment.failed", "refund.created", "refund.processed"].includes(eventType)
+      ? JSON.stringify({ eventType,
+        payment: paymentEntity && { id: paymentEntity.id, order_id: paymentEntity.order_id, amount: paymentEntity.amount, currency: paymentEntity.currency },
+        refund: refundEntity && { id: refundEntity.id, payment_id: refundEntity.payment_id, amount: refundEntity.amount, status: refundEntity.status },
+      }) : body;
+    const eventId = "payload_" + crypto.createHash("sha256").update(fingerprint).digest("hex");
+    const providerEventId = req.headers.get("x-razorpay-event-id") || event.id || null;
+    if (providerEventId && providerEventId.length > 200) return NextResponse.json({ success: false, message: "Invalid event ID." }, { status: 400 });
     const admin = getSupabaseAdmin();
     const { error: receiptError } = await admin.from("payment_events").insert({
-      event_id: eventId, event_type: eventType, state: "received",
+      event_id: eventId, provider_event_id: providerEventId, event_type: eventType, state: "received",
       payment_id: event.payload?.payment?.entity?.id || event.payload?.refund?.entity?.payment_id || null,
       amount: event.payload?.payment?.entity?.amount || event.payload?.refund?.entity?.amount || null,
       currency: event.payload?.payment?.entity?.currency || null,
     });
     if (receiptError && receiptError.code !== "23505") {
-      console.error("[WEBHOOK_RECEIPT_ERROR]", receiptError);
+      logSecurityFailure("[WEBHOOK_RECEIPT_ERROR]", receiptError);
       return NextResponse.json({ success: false, message: "Webhook receipt unavailable." }, { status: 503 });
     }
     if (receiptError?.code === "23505") {
@@ -71,7 +82,7 @@ export async function POST(req: Request) {
         p_method: gatewayPayment.method || null, p_event_id: eventId,
       });
       if (captureError || captured !== "captured") {
-        console.error("[WEBHOOK_CAPTURE_ERROR]", captureError);
+        logSecurityFailure("[WEBHOOK_CAPTURE_ERROR]", captureError);
         return NextResponse.json({ success: false, message: "Capture persistence failed." }, { status: 503 });
       }
       const { data: timeline } = await admin.from("commission_events").select("id")
@@ -107,7 +118,7 @@ export async function POST(req: Request) {
         p_amount: refund.amount!, p_processed: processed,
       });
       if (refundError) {
-        console.error("[REFUND_RECORD_ERROR]", refundError);
+        logSecurityFailure("[REFUND_RECORD_ERROR]", refundError);
         return NextResponse.json({ success: false, message: "Refund persistence failed; retry later." }, { status: 503 });
       }
       return NextResponse.json({ success: true, message: "Refund event recorded." });
@@ -118,7 +129,7 @@ export async function POST(req: Request) {
     if (ignoredError) return NextResponse.json({ success: false, message: "Webhook event persistence failed." }, { status: 503 });
     return NextResponse.json({ success: true, message: "Event ignored." });
   } catch (error) {
-    console.error("[WEBHOOK_FATAL]", error);
+    logSecurityFailure("[WEBHOOK_FATAL]", error);
     return NextResponse.json({ success: false, message: "Webhook temporarily unavailable." }, { status: 503 });
   }
 }

@@ -18,7 +18,7 @@ import { ArtworkFrame } from "./ArtworkFrame";
 import { Plant, Bench, PersonSilhouette } from "./Props";
 import { MuseumShell } from "./museum/MuseumShell";
 import { clampToWalkableBounds, VISITOR_BOUNDS } from "@/features/artwork/utils/exhibition-validation";
-import { artworks as staticArtworks } from "@/features/artwork/data/artworks";
+
 
 function WebGLCleanup() {
   const { gl } = useThree();
@@ -41,6 +41,7 @@ export interface GalleryArtwork {
   dimensions?: string;
   price?: number;
   isAvailable?: boolean;
+  catalogPlacement?: boolean;
   url: string;
   position: [number, number, number];
   rotation?: [number, number, number];
@@ -372,39 +373,39 @@ export function GalleryScene({
 
   // Map incoming artworks to appropriate gallery slot positions and merge metadata
   const displayArtworks = useMemo(() => {
-    const staticMap = new Map(staticArtworks.map((a) => [a.id, a]));
+
 
     if (useLegacyHall) {
-      const baseList = artworks && artworks.length > 0 ? artworks : ARTWORKS;
+      const baseList = artworks || [];
       return baseList.map((art) => {
-        const staticData = staticMap.get(art.id);
+
         return {
           ...art,
-          description: art.description || staticData?.description,
-          price: art.price !== undefined ? art.price : staticData?.price,
-          isAvailable: art.isAvailable !== undefined ? art.isAvailable : staticData?.isAvailable,
-          medium: art.medium || staticData?.medium,
-          dimensions: art.dimensions || staticData?.dimensions,
+          description: art.description,
+          price: art.price,
+          isAvailable: art.isAvailable,
+          medium: art.medium,
+          dimensions: art.dimensions,
         };
       });
     }
 
     // In Museum Shell mode, assign artworks to configured museum slots
-    const baseList = artworks && artworks.length > 0 ? artworks : MUSEUM_ARTWORKS;
+    const baseList = artworks || [];
     const museumPosMap = new Map<string, GalleryArtwork>(
       MUSEUM_ARTWORKS.map((m) => [m.id, m])
     );
 
     return baseList.map((art) => {
-      const slotMatch = museumPosMap.get(art.id);
-      const staticData = staticMap.get(art.id);
+      const slotMatch = art.catalogPlacement ? undefined : museumPosMap.get(art.id);
+
       return {
         ...art,
-        description: art.description || staticData?.description,
-        price: art.price !== undefined ? art.price : staticData?.price,
-        isAvailable: art.isAvailable !== undefined ? art.isAvailable : staticData?.isAvailable,
-        medium: art.medium || staticData?.medium,
-        dimensions: art.dimensions || staticData?.dimensions,
+        description: art.description,
+        price: art.price,
+        isAvailable: art.isAvailable,
+        medium: art.medium,
+        dimensions: art.dimensions,
         position: slotMatch ? slotMatch.position : art.position,
         rotation: slotMatch ? slotMatch.rotation : art.rotation,
       };
@@ -463,6 +464,7 @@ export function GalleryScene({
 
         {/* 3. OPTIMIZED FLOOR SHADOWS */}
         <ContactShadows
+          frames={1}
           resolution={512}
           scale={100}
           blur={2.5}
