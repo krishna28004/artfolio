@@ -8,6 +8,7 @@ import { ExhibitionErrorBoundary } from "@/components/exhibition/ExhibitionError
 import { ArtworkDetailModal } from "@/components/exhibition/ArtworkDetailModal";
 import { MobileControls } from "@/components/exhibition/MobileControls";
 import { Artwork } from "@/features/artwork/data/artworks";
+import { getMuseumSlot } from "@/features/artwork/data/museum-slots";
 import { isValid3DPosition } from "@/features/artwork/utils/exhibition-validation";
 import { safeRequestPointerLock } from "@/components/exhibition/controllers/pointer-lock-manager";
 import { isTouchCapable, isFinePointerOnly } from "@/components/exhibition/touch/touch-controller";
@@ -17,7 +18,9 @@ export default function ExhibitionPage() {
   const [showWalkHint, setShowWalkHint] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showHUD, setShowHUD] = useState(false);
-  const [dbArtworks, setDbArtworks] = useState<GalleryArtwork[] | undefined>(undefined);
+  const [dbArtworks, setDbArtworks] = useState<GalleryArtwork[]>([]);
+  const [catalogState, setCatalogState] = useState<"loading" | "ready" | "empty" | "error">("loading");
+  const [catalogAttempt, setCatalogAttempt] = useState(0);
   const [focusedArtwork, setFocusedArtwork] = useState<GalleryArtwork | null>(null);
   const [selectedArtworkModal, setSelectedArtworkModal] = useState<GalleryArtwork | null>(null);
   const [isPointerLocked, setIsPointerLocked] = useState(false);
@@ -43,40 +46,37 @@ export default function ExhibitionPage() {
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  // Fetch artwork data with robust 3D placement validation
+  // Only persisted public artworks are rendered. An outage never becomes a seed exhibition.
   useEffect(() => {
     let isMounted = true;
-    fetch("/api/artworks")
-      .then((res) => res.json())
-      .then((data) => {
-        if (isMounted && data.success && Array.isArray(data.data)) {
-          const formatted: GalleryArtwork[] = (data.data as Artwork[])
-            .filter((a) => isValid3DPosition(a.position3D) && a.isAvailable !== false)
-            .map((a) => ({
-              id: a.id,
-              title: a.title,
-              artist: a.artist,
-              year: a.year,
-              medium: a.medium,
-              dimensions: a.dimensions,
-              url: a.textureUrl || a.imageUrl,
-              position: a.position3D as [number, number, number],
-              rotation: (a.rotation3D as [number, number, number]) || [0, 0, 0],
-            }));
-          if (formatted.length > 0) {
-            setDbArtworks(formatted);
-          }
-        }
+    const controller = new AbortController();
+    fetch("/api/artworks?exhibition=1", { signal: controller.signal })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok || !data.success || !Array.isArray(data.data)) throw new Error("Catalog unavailable");
+        return data;
       })
-      .catch((err) => {
-        console.warn("[EXHIBITION_API] Using curated static exhibition catalog:", err);
+      .then((data) => {
+        if (!isMounted) return;
+        const formatted: GalleryArtwork[] = (data.data as Artwork[])
+          .filter((art) => !!getMuseumSlot(art.wallIdentifier) || isValid3DPosition(art.position3D))
+          .map((art) => ({
+            id: art.id, title: art.title, artist: art.artist, year: art.year,
+            description: art.description, medium: art.medium, dimensions: art.dimensions,
+            price: art.price, isAvailable: art.isAvailable,
+            url: art.textureUrl || art.imageUrl,
+            position: art.position3D as [number, number, number],
+            rotation: art.rotation3D || [0, 0, 0],
+            catalogPlacement: data.schema === "publication",
+          }));
+        setDbArtworks(formatted);
+        setCatalogState(formatted.length ? "ready" : "empty");
+      })
+      .catch(() => {
+        if (isMounted) { setDbArtworks([]); setCatalogState("error"); }
       });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
+    return () => { isMounted = false; controller.abort(); };
+  }, [catalogAttempt]);
   const triggerWalkHint = useCallback(() => {
     setShowWalkHint(true);
     const timer = setTimeout(() => setShowWalkHint(false), 6000);
@@ -228,21 +228,33 @@ export default function ExhibitionPage() {
         }}
       />
 
+      {catalogState !== "ready" && (
+        <div role={catalogState === "error" ? "alert" : "status"} className="absolute top-1/2 left-1/2 z-[60] w-[min(90vw,30rem)] -translate-x-1/2 -translate-y-1/2 border border-white/15 bg-background/95 px-5 py-6 text-center text-sm text-text">
+          <p>{catalogState === "loading" ? "Loading the artwork collection…" : catalogState === "error" ? "The exhibition collection is temporarily unavailable." : "No artworks are currently on view."}</p>
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+            {catalogState === "error" && <button type="button" onClick={() => { setCatalogState("loading"); setCatalogAttempt((attempt) => attempt + 1); }} className="min-h-11 px-3 text-primary underline focus-visible:outline focus-visible:outline-2">Try again</button>}
+            <Link href="/exhibition/accessible" className="min-h-11 px-3 inline-flex items-center text-primary underline focus-visible:outline focus-visible:outline-2">2D archive</Link>
+            <Link href="/" className="min-h-11 px-3 inline-flex items-center text-text underline focus-visible:outline focus-visible:outline-2">Exit</Link>
+          </div>
+        </div>
+      )}
       {/* R3F Canvas with WebGL Error Boundary */}
-      <ExhibitionErrorBoundary>
-        <GalleryScene
-          artworks={dbArtworks}
-          onFocusArtwork={setFocusedArtwork}
-          onSelectArtwork={setSelectedArtworkModal}
-          isModalOpen={!!selectedArtworkModal}
-          useLegacyHall={useLegacyHall}
-          prefersReducedMotion={prefersReducedMotion}
-          onPointerLockChange={setIsPointerLocked}
-        />
-      </ExhibitionErrorBoundary>
+      {catalogState === "ready" && (
+        <ExhibitionErrorBoundary>
+          <GalleryScene
+            artworks={dbArtworks}
+            onFocusArtwork={setFocusedArtwork}
+            onSelectArtwork={setSelectedArtworkModal}
+            isModalOpen={!!selectedArtworkModal}
+            useLegacyHall={useLegacyHall}
+            prefersReducedMotion={prefersReducedMotion}
+            onPointerLockChange={setIsPointerLocked}
+          />
+        </ExhibitionErrorBoundary>
+      )}
 
       {/* ========== HUD (shown after entering) ========== */}
-      {entered && (
+      {entered && catalogState === "ready" && (
         <>
           {/* Top Bar with safe-area padding */}
           <div className="absolute top-0 left-0 w-full z-20 p-6 pt-[max(1.5rem,env(safe-area-inset-top))] pl-[max(1.5rem,env(safe-area-inset-left))] pr-[max(1.5rem,env(safe-area-inset-right))] flex justify-between items-start pointer-events-none">
@@ -432,7 +444,7 @@ export default function ExhibitionPage() {
       )}
 
       {/* ========== ENTRY OVERLAY ========== */}
-      {!entered && (
+      {!entered && catalogState === "ready" && (
         <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/90 backdrop-blur-md p-6">
           <h1 className="font-serif text-3xl md:text-5xl text-white tracking-tight mb-8 text-center">
             Virtual Gallery Exhibition

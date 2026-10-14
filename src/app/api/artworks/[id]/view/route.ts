@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
+import { getClientIp } from "@/shared/utils/rate-limit";
+import { getArtworkById } from "@/features/artwork/services/artwork-service";
 import { getSupabaseAdmin } from "@/shared/services/supabase-admin";
 
 /**
@@ -7,19 +9,19 @@ import { getSupabaseAdmin } from "@/shared/services/supabase-admin";
  * Never stores or logs raw IP addresses.
  */
 function hashClientIp(req: NextRequest): string {
-  const forwarded = req.headers.get("x-forwarded-for");
-  const rawIp = forwarded ? forwarded.split(",")[0].trim() : req.headers.get("x-real-ip") || "127.0.0.1";
-  const salt = process.env.TELEMETRY_SALT || process.env.VIEW_TELEMETRY_SALT || process.env.SUPABASE_SERVICE_ROLE_KEY || "artfolio-telemetry-salt";
-  return crypto.createHash("sha256").update(`${rawIp}:${salt}`).digest("hex");
+  const salt = process.env.TELEMETRY_SALT || process.env.VIEW_TELEMETRY_SALT;
+  if (!salt && process.env.NODE_ENV === "production") throw new Error("Telemetry recording is unavailable.");
+  return crypto.createHmac("sha256", salt || "local-fixture-only").update(getClientIp(req)).digest("hex");
 }
 
 export async function GET(
   _req: NextRequest,
-  context: { params: Promise<{ id: string }> | { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const params = await Promise.resolve(context.params);
     const artworkId = params.id;
+    if (!(await getArtworkById(artworkId))) return NextResponse.json({ success: false, message: "Artwork unavailable." }, { status: 404 });
     const supabase = getSupabaseAdmin();
 
     const { count, error } = await supabase
@@ -28,24 +30,25 @@ export async function GET(
       .eq("artwork_id", artworkId);
 
     if (error) {
-      console.warn("[TELEMETRY_GET_ERROR] Failed to fetch count:", error);
+      console.warn("[TELEMETRY_GET_ERROR]");
       return NextResponse.json({ success: false, views: 0 }, { status: 200 });
     }
 
     return NextResponse.json({ success: true, views: count || 0 });
-  } catch (error) {
-    console.error("[TELEMETRY_GET_FATAL]", error);
+  } catch {
+    console.error("[TELEMETRY_GET_FATAL]");
     return NextResponse.json({ success: false, views: 0 }, { status: 200 });
   }
 }
 
 export async function POST(
   req: NextRequest,
-  context: { params: Promise<{ id: string }> | { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const params = await Promise.resolve(context.params);
     const artworkId = params.id;
+    if (!(await getArtworkById(artworkId))) return NextResponse.json({ success: false, message: "Artwork unavailable." }, { status: 404 });
     const ipHash = hashClientIp(req);
     const supabase = getSupabaseAdmin();
 
@@ -81,8 +84,8 @@ export async function POST(
       views: count || 0,
       recorded: !recentView,
     });
-  } catch (error) {
-    console.warn("[TELEMETRY_RECORD_ERROR] View recording failed safely:", error);
+  } catch {
+    console.warn("[TELEMETRY_RECORD_ERROR]");
     return NextResponse.json({ success: false, views: null }, { status: 200 });
   }
 }

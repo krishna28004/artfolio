@@ -24,6 +24,7 @@ const requests = new Map();
 let nextId = 0;
 const exceptions = [];
 const consoleErrors = [];
+const networkFailures = [];
 async function until(check, label, timeout = 30000) {
   const end = Date.now() + timeout;
   while (Date.now() < end) {
@@ -32,6 +33,7 @@ async function until(check, label, timeout = 30000) {
     await sleep(200);
   }
   if (socket?.readyState === WebSocket.OPEN) {
+    console.log("Browser diagnostics", JSON.stringify({ exceptions, consoleErrors, networkFailures }));
     console.log("Timeout diagnostics", await pose(), await evaluate("({ focused:document.activeElement?.tagName, text:document.body.innerText.slice(-1500), visible:document.visibilityState })"));
     const screenshot = await send("Page.captureScreenshot");
     const screenshotPath = path.join(profile, "failure.png");
@@ -67,7 +69,7 @@ const inspect = `(() => {
       if (!fiber) continue;
       if (fiber.child) stack.push(fiber.child);
       if (fiber.sibling) stack.push(fiber.sibling);
-      if (fiber.type?.name === 'Controls') {
+      if (fiber.memoizedProps?.playerPoseRef && Array.isArray(fiber.memoizedProps.artworks) && typeof fiber.memoizedProps.isModalOpen === 'boolean') {
         for (let hook = fiber.memoizedState; hook; hook = hook.next) {
           const value = hook.memoizedState?.current;
           if (value?.isCamera) {
@@ -112,12 +114,17 @@ try {
       requests.delete(data.id);
       if (data.error) request.reject(new Error(data.error.message)); else request.resolve(data.result);
     }
+    if (data.method === "Network.loadingFailed") networkFailures.push({ type: data.params.type, error: data.params.errorText });
     if (data.method === "Runtime.exceptionThrown") exceptions.push(data.params.exceptionDetails.text);
     if (data.method === "Runtime.consoleAPICalled" && data.params.type === "error") {
       consoleErrors.push(data.params.args.map((arg) => arg.value || arg.description || "").join(" "));
     }
   });
-  await send("Runtime.enable"); await send("Page.enable");
+  socket.addEventListener("close", () => {
+    for (const request of requests.values()) request.reject(new Error("Browser connection closed"));
+    requests.clear();
+  });
+  await send("Runtime.enable"); await send("Page.enable"); await send("Network.enable");
   await send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
   await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
   await send("Page.addScriptToEvaluateOnNewDocument", { source: `
@@ -253,10 +260,14 @@ try {
   }
   async function touchInput(type, points) { await send("Input.dispatchTouchEvent", { type, touchPoints: points }); }
   const joystick = await bounds('[aria-label="Movement Virtual Joystick"]');
-  const look = await bounds('[aria-hidden="true"]');
+  const look = await bounds('.touch-none[aria-hidden="true"]');
   assert.ok(joystick && look && joystick.x >= 0 && joystick.y >= 0);
   const movingTouch = { id: 1, x: joystick.x + joystick.width / 2, y: joystick.y + joystick.height / 2 - 45 };
   const lookingTouch = { id: 2, x: look.x + look.width / 2, y: look.y + look.height / 2 };
+  // A live controller can mount while the actual loading overlay still blocks input.
+  // Wait for the real joystick to receive hit tests rather than hiding the overlay.
+  await until(async () => evaluate("(() => { const el=document.querySelector('[aria-label=\"Movement Virtual Joystick\"]'); const r=el?.getBoundingClientRect(); return r && el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2-45)); })()"),
+    "mobile assets loaded and joystick unobstructed", 90000);
   const mobileBefore = await pose();
   await touchInput("touchStart", [movingTouch, lookingTouch]);
   await touchInput("touchMove", [movingTouch, { ...lookingTouch, x: lookingTouch.x + 35, y: lookingTouch.y - 15 }]);
@@ -292,7 +303,7 @@ try {
   const landscapeBefore = await pose();
   await sleep(300);
   const landscapeJoystick = await bounds('[aria-label="Movement Virtual Joystick"]');
-  const landscapeLook = await bounds('[aria-hidden="true"]');
+  const landscapeLook = await bounds('.touch-none[aria-hidden="true"]');
   assert.ok(landscapeJoystick.y >= 0 && landscapeJoystick.y + landscapeJoystick.height <= 390);
   assert.ok(landscapeLook.height > 0);
   assert.deepEqual((await pose()).position, landscapeBefore.position);
@@ -310,7 +321,9 @@ try {
   assert.equal(exceptions.length, 0, `Uncaught browser exceptions: ${exceptions.join('; ')}`);
   console.log(JSON.stringify({ consoleErrors, desktopFinalPose: await pose(), profile }, null, 2));
 } finally {
-  if (socket?.readyState === WebSocket.OPEN) await send("Browser.close").catch(() => {});
+  if (socket?.readyState === WebSocket.OPEN) {
+    await Promise.race([send("Browser.close").catch(() => {}), sleep(2000)]);
+  }
   socket?.close();
   browser.kill();
 }

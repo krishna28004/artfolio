@@ -45,13 +45,13 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         <>
             {/* Backdrop */}
             <div
-                ref={panelRef}
                 className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity duration-700 ease-editorial ${isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
                 onClick={onClose}
             />
 
             {/* Sidebar Panel */}
             <div
+                ref={panelRef}
                 id="site-menu-panel"
                 role="dialog"
                 aria-label="Site menu"
@@ -99,7 +99,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
                 <div className="mt-auto border-t border-white/10 pt-8 flex flex-col gap-4">
                     <p className="font-sans text-[11px] uppercase tracking-[0.2em] text-muted">Contact</p>
-                    <a href="https://mail.google.com/mail/?view=cm&to=krishnakumar2811004@gmail.com" target="_blank" rel="noopener noreferrer" className="font-sans text-[14px] text-text hover:text-primary transition-colors">krishnakumar2811004@gmail.com</a>
+                    <a href="mailto:krishnakumar2811004@gmail.com" className="font-sans text-[14px] text-text hover:text-primary transition-colors">krishnakumar2811004@gmail.com</a>
                 </div>
             </div>
         </>

@@ -1,3 +1,4 @@
+import "server-only";
 import crypto from "node:crypto";
 
 export function acceptedQuoteCheckoutToken(commissionId: string, version: number): string {

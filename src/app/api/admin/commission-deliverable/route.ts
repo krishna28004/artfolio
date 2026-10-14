@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { verifyAdminAuth } from "@/features/admin/utils/auth";
 import { getSupabaseAdmin } from "@/shared/services/supabase-admin";
-import { validReferenceContent } from "@/app/api/media/upload/route";
+import { validReferenceContent } from "@/features/commission/server/file-content";
 
 const LIMIT = 25 * 1024 * 1024;
 const EXTENSIONS: Record<string, string> = {

@@ -22,7 +22,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --import ./tests/register-loader.mjs --experimental-strip-types --test tests/money.test.ts tests/crypto.test.ts tests/commission-schema.test.ts tests/commission-route.test.ts tests/commission-order.test.ts tests/commission-access.test.ts tests/commission-quote.test.ts tests/payment-logic.test.ts tests/production-readiness.test.ts tests/security-hardening.test.ts tests/exhibition.test.ts tests/museum-config.test.ts tests/museum-shell.test.ts tests/collision.test.ts tests/artwork-interaction.test.ts tests/mobile-controls.test.ts tests/pointer-lock.test.ts tests/exhibition-controller.test.ts"
+    "test": "node --import ./tests/register-loader.mjs --experimental-strip-types --test --test-concurrency=1 tests/supabase-security.test.ts tests/catalog-recovery.test.ts tests/money.test.ts tests/crypto.test.ts tests/commission-schema.test.ts tests/commission-route.test.ts tests/commission-order.test.ts tests/commission-access.test.ts tests/commission-quote.test.ts tests/payment-logic.test.ts tests/production-readiness.test.ts tests/security-hardening.test.ts tests/exhibition.test.ts tests/museum-config.test.ts tests/museum-shell.test.ts tests/collision.test.ts tests/artwork-interaction.test.ts tests/mobile-controls.test.ts tests/pointer-lock.test.ts tests/exhibition-controller.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

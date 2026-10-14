@@ -23,6 +23,7 @@ const artworkInputSchema = z.object({
   displayOrder: z.number().int().default(0),
   isAvailable: z.boolean().default(true),
   isFeatured: z.boolean().default(false),
+  publicationStatus: z.enum(["draft", "published", "archived"]).default("draft"),
 });
 
 export async function GET(req: NextRequest) {
@@ -39,7 +40,7 @@ export async function GET(req: NextRequest) {
       .order("display_order", { ascending: true });
 
     if (error) {
-      return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+      return NextResponse.json({ success: false, message: error.code === "23505" ? "Artwork ID already exists. Update that record instead." : "Artwork could not be saved." }, { status: error.code === "23505" ? 409 : 503 });
     }
 
     return NextResponse.json({ success: true, data });
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest) {
 
     const { data, error } = await supabaseAdmin
       .from("artworks")
-      .upsert({
+      .insert({
         id: d.id,
         title: d.title,
         artist: d.artist,
@@ -88,6 +89,8 @@ export async function POST(req: NextRequest) {
         wall_identifier: d.wallIdentifier || null,
         display_order: d.displayOrder,
         is_available: d.isAvailable,
+        publication_status: d.publicationStatus,
+        sale_status: d.isAvailable ? "available" : "not_for_sale",
         is_featured: d.isFeatured,
         updated_at: new Date().toISOString(),
       })
@@ -95,7 +98,7 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) {
-      return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+      return NextResponse.json({ success: false, message: error.code === "23505" ? "Artwork ID already exists. Update that record instead." : "Artwork could not be saved." }, { status: error.code === "23505" ? 409 : 503 });
     }
 
     // Audit log

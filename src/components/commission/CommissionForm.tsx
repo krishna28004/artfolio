@@ -13,6 +13,7 @@ import { uploadPrivateReference, type PrivateReferenceClaim } from "@/shared/ser
 
 interface CommissionFormProps {
   initialReference?: string;
+  acceptingRequests?: boolean;
 }
 
 const SCALE_OPTIONS = [
@@ -29,7 +30,7 @@ const BUDGET_OPTIONS = [
   { id: "undisclosed", label: "Undisclosed", subtitle: "Custom Scope" },
 ];
 
-export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
+export function CommissionForm({ initialReference = "", acceptingRequests = false }: CommissionFormProps) {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submittedId, setSubmittedId] = useState("");
   const [uploadState, setUploadState] = useState<"idle" | "uploading" | "done" | "error">("idle");
@@ -78,6 +79,7 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
 
   const processUpload = useCallback(
     async (file: File) => {
+      if (!acceptingRequests) { setServerError("New commissions are temporarily paused."); return; }
       if (!["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(file.type)) {
         setServerError("Please upload a JPG, PNG, WebP, or PDF file.");
         setUploadState("error");
@@ -110,7 +112,7 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
         setServerError(error instanceof Error ? error.message : "Failed to upload reference file.");
       }
     },
-    [setValue]
+    [setValue, acceptingRequests]
   );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -137,6 +139,7 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
   };
 
   const onSubmit = async (data: CommissionFormData) => {
+    if (!acceptingRequests) { setServerError("New commissions are temporarily paused."); return; }
     setServerError("");
     const maxRetries = 3;
     let attempt = 0;
@@ -213,6 +216,18 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
     );
   }
 
+  if (!acceptingRequests) {
+    return (
+      <div role="status" className="border border-primary/30 bg-primary/[0.04] px-6 py-10 text-center">
+        <h2 className="font-serif text-2xl text-text mb-3">Requests are paused</h2>
+        <p className="text-sm leading-relaxed text-muted max-w-md mx-auto">
+          New commission requests cannot be submitted right now. If you already have a request,
+          your private tracking link remains available.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <form
       onSubmit={handleSubmit(onSubmit)}
@@ -267,6 +282,7 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
         <input
           ref={fileInputRef}
           type="file"
+          disabled={!acceptingRequests}
           accept="image/jpeg,image/png,image/webp,application/pdf"
           multiple
           onChange={handleFileChange}
@@ -283,7 +299,8 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
         {referenceFiles.length < 5 && (
           <div
             role="button"
-            tabIndex={0}
+            tabIndex={acceptingRequests ? 0 : -1}
+            aria-disabled={!acceptingRequests}
             aria-label="Upload reference material. Drag and drop files or press Enter to browse."
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
@@ -460,7 +477,7 @@ export function CommissionForm({ initialReference = "" }: CommissionFormProps) {
       <div className="flex flex-col gap-4 pt-2">
         <button
           type="submit"
-          disabled={isSubmitting || uploadState === "uploading"}
+          disabled={!acceptingRequests || isSubmitting || uploadState === "uploading"}
           className="w-full py-4 bg-[#F5F2EB] hover:bg-[#E8E0D2] active:bg-[#C5A880] text-[#0C0C0E] font-sans font-medium text-[12px] tracking-[0.24em] uppercase transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm flex items-center justify-center gap-2 cursor-pointer group"
         >
           {isSubmitting ? (

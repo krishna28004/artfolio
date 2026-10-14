@@ -3,6 +3,11 @@ import type { Database } from "@/types/supabase";
 
 let clientInstance: SupabaseClient<Database> | null = null;
 
+/** Isolated test seam; never used by application code. */
+export function _setPublicInstanceForTesting(mock: SupabaseClient<Database> | null) {
+  clientInstance = mock;
+}
+
 /**
  * Returns the public anonymous Supabase client instance.
  * Lazily initializes on first use to prevent build-time static evaluation crashes.
@@ -19,7 +24,7 @@ export function getSupabase(): SupabaseClient<Database> {
     );
   }
 
-  clientInstance = createClient<Database>(supabaseUrl, supabaseAnonKey);
+  clientInstance = createClient<Database>(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
   return clientInstance;
 }
 

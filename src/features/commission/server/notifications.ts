@@ -1,18 +1,30 @@
+import { logSecurityFailure } from "@/shared/utils/security-log";
+import "server-only";
 import { Resend } from "resend";
 import { getSupabaseAdmin } from "@/shared/services/supabase-admin";
 import { makeTrackingToken } from "@/features/commission/server/tracking-token";
 
+export function notificationRecipientAllowed(audience: string, recipient: string, customerEmail: string | null | undefined) {
+  const owner = process.env.ADMIN_NOTIFICATION_EMAIL || process.env.ADMIN_EMAIL;
+  const expected = audience === "customer" ? customerEmail : audience === "owner" ? owner : null;
+  return !!expected && /^[^\s,;<>@]+@[^\s,;<>@]+\.[^\s,;<>@]+$/.test(recipient) &&
+    recipient.length <= 254 && recipient.toLowerCase() === expected.toLowerCase();
+}
+
 export async function queueCommissionNotice(commissionId: string, eventId: string, recipient: string, audience: "customer" | "owner") {
+  const { data: commission, error: lookupError } = await getSupabaseAdmin().from("commissions")
+    .select("email").eq("id", commissionId).maybeSingle();
+  if (lookupError || !notificationRecipientAllowed(audience, recipient, commission?.email)) return false;
   const { error } = await getSupabaseAdmin().from("notification_jobs").upsert({
     commission_id: commissionId, dedupe_key: `${eventId}:${audience}`, recipient,
     template: `${eventId}:${audience}`,
   }, { onConflict: "dedupe_key", ignoreDuplicates: true });
-  if (error) console.error("[NOTIFICATION_QUEUE_ERROR]", error);
+  if (error) logSecurityFailure("[NOTIFICATION_QUEUE_ERROR]");
   return !error;
 }
 
 export async function deliverPendingNotifications(limit = 10) {
-  if (!process.env.RESEND_API_KEY) return { sent: 0, pending: "Resend is not configured" };
+  if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) return { sent: 0, pending: "Resend is not configured" };
   const admin = getSupabaseAdmin();
   // A worker can terminate after claiming a job. Return expired claims to the
   // queue; Resend's stable idempotency key protects a retry after send/ack loss.
@@ -28,6 +40,7 @@ export async function deliverPendingNotifications(limit = 10) {
   const resend = new Resend(process.env.RESEND_API_KEY);
   const site = process.env.NEXT_PUBLIC_SITE_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:3000");
   const siteUrl = new URL(site);
+  if (siteUrl.username || siteUrl.password || siteUrl.search || siteUrl.hash) throw new Error("Invalid canonical site URL");
   if (siteUrl.protocol !== "https:" && !(process.env.NODE_ENV !== "production" && siteUrl.hostname === "localhost")) {
     throw new Error("Canonical HTTPS site URL is required for notifications");
   }
@@ -44,10 +57,13 @@ export async function deliverPendingNotifications(limit = 10) {
       const [{ data: event }, { data: commission }] = await Promise.all([
         admin.from("commission_events").select("event_type, body, metadata")
           .eq("id", eventId).eq("commission_id", job.commission_id).maybeSingle(),
-        admin.from("commissions").select("id, name, request_reference, tracking_nonce, status")
+        admin.from("commissions").select("id, name, email, request_reference, tracking_nonce, status")
           .eq("id", job.commission_id).maybeSingle(),
       ]);
-      if (!event || !commission) throw new Error("Notification record missing");
+      if (!event || !commission || !/^[0-9a-f-]{36}:(customer|owner)$/i.test(job.template) ||
+          job.dedupe_key !== job.template || !notificationRecipientAllowed(audience, job.recipient, commission.email)) {
+        throw new Error("Notification identity or recipient invalid");
+      }
       const trackingLink = commission.tracking_nonce ? new URL(
         `/commission/track/open?id=${commission.id}&token=${encodeURIComponent(makeTrackingToken(commission.tracking_nonce))}`,
         siteUrl).toString() : null;
@@ -69,8 +85,8 @@ export async function deliverPendingNotifications(limit = 10) {
         .eq("id", job.id);
       if (updateError) throw updateError;
       sent++;
-    } catch (cause) {
-      console.error("[NOTIFICATION_DELIVERY_ERROR]", cause);
+    } catch {
+      logSecurityFailure("[NOTIFICATION_DELIVERY_ERROR]");
       await admin.from("notification_jobs").update({
         state: "failed", last_error: "Delivery failed; retry scheduled",
         next_attempt_at: new Date(Date.now() + Math.min(60, 2 ** Math.min(job.attempts, 6)) * 60 * 1000).toISOString(),

@@ -46,10 +46,8 @@ export function CarouselStrip({ artworks }: CarouselStripProps) {
   const stripRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<(HTMLElement | null)[]>([]);
   const offsetRef = useRef(0);
-  const isHoverPausedRef = useRef(false);
   const isFocusPausedRef = useRef(false);
   const isManuallyPausedRef = useRef(false);
-  const resumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [config, setConfig] = useState<BreakpointConfig>(() => getConfig(1440));
 
   // Reduced-motion check
@@ -107,28 +105,13 @@ export function CarouselStrip({ artworks }: CarouselStripProps) {
     [config]
   );
 
-  // Pause / resume handlers for hover
-  const handleMouseEnter = useCallback(() => {
-    isHoverPausedRef.current = true;
-    if (resumeTimerRef.current) {
-      clearTimeout(resumeTimerRef.current);
-      resumeTimerRef.current = null;
-    }
-  }, []);
-
-  const handleMouseLeave = useCallback(() => {
-    if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
-    resumeTimerRef.current = setTimeout(() => {
-      isHoverPausedRef.current = false;
-    }, 300);
-  }, []);
-
   // Main animation loop
   useEffect(() => {
     if (reducedMotion || totalCards < 3) return;
 
     let animationId: number;
     let lastTimestamp = 0;
+    let needsInitialPaint = true;
 
     const animate = (timestamp: number) => {
       if (lastTimestamp === 0) lastTimestamp = timestamp;
@@ -138,8 +121,8 @@ export function CarouselStrip({ artworks }: CarouselStripProps) {
       // Prevent giant delta when returning from background tab
       const safeDelta = Math.min(delta, 0.1);
 
-      if (!isHoverPausedRef.current && !isFocusPausedRef.current &&
-          !isManuallyPausedRef.current && !document.hidden) {
+      const moving = !isFocusPausedRef.current && !isManuallyPausedRef.current && !document.hidden;
+      if (moving) {
         offsetRef.current -= config.speed * safeDelta;
 
         // Seamless reset: when we've scrolled one full set, reset
@@ -148,10 +131,13 @@ export function CarouselStrip({ artworks }: CarouselStripProps) {
         }
       }
 
-      if (stripRef.current) {
-        stripRef.current.style.transform = `translateX(${offsetRef.current}px)`;
+      if (moving || needsInitialPaint) {
+        if (stripRef.current) {
+          stripRef.current.style.transform = `translateX(${offsetRef.current}px)`;
+        }
+        updateCardTransforms(offsetRef.current);
+        needsInitialPaint = false;
       }
-      updateCardTransforms(offsetRef.current);
 
       animationId = requestAnimationFrame(animate);
     };
@@ -205,8 +191,6 @@ export function CarouselStrip({ artworks }: CarouselStripProps) {
       {/* The carousel track container — overflow hidden with padding for perspective */}
       <div
         className={`w-full py-4 ${reducedMotion || totalCards < 3 ? "overflow-x-auto" : "overflow-hidden"}`}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
         onFocusCapture={() => { isFocusPausedRef.current = true; }}
         onBlurCapture={(event) => {
           if (!event.currentTarget.contains(event.relatedTarget)) isFocusPausedRef.current = false;

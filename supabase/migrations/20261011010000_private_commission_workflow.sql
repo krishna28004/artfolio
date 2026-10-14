@@ -148,10 +148,11 @@ BEGIN
   SELECT * INTO existing_payment FROM public.payments
     WHERE razorpay_payment_id = p_payment_id OR
       (razorpay_order_id = p_order_id AND status = 'created')
-    ORDER BY (razorpay_payment_id = p_payment_id) DESC, created_at DESC
+    ORDER BY (razorpay_payment_id = p_payment_id) DESC NULLS LAST, created_at DESC
     LIMIT 1 FOR UPDATE;
   IF FOUND THEN
     IF existing_payment.commission_id <> p_commission_id OR
+       existing_payment.razorpay_order_id IS DISTINCT FROM p_order_id OR
        existing_payment.amount <> p_amount OR existing_payment.currency <> p_currency THEN
       RAISE EXCEPTION 'payment_record_mismatch';
     END IF;
@@ -302,7 +303,8 @@ CREATE OR REPLACE FUNCTION public.accept_commission_quote(
 DECLARE c public.commissions%ROWTYPE; new_event_id uuid;
 BEGIN
   SELECT * INTO c FROM public.commissions WHERE id = p_commission_id FOR UPDATE;
-  IF NOT FOUND OR c.status <> 'quote_sent' OR c.quote_version <> p_quote_version OR
+  IF NOT FOUND OR p_quote_version IS NULL OR p_checkout_token_hash IS NULL OR p_expires_at IS NULL OR
+     c.status <> 'quote_sent' OR c.quote_version <> p_quote_version OR
      c.quote_version < 1 OR c.price IS NULL OR c.price <= 0 OR
      c.quote_scope IS NULL OR c.quote_terms IS NULL OR
      p_checkout_token_hash !~ '^[0-9a-f]{64}$' OR

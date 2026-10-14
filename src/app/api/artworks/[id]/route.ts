@@ -3,7 +3,7 @@ import { getArtworkById } from "@/features/artwork/services/artwork-service";
 
 export async function GET(
   _req: NextRequest,
-  context: { params: Promise<{ id: string }> | { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const params = await Promise.resolve(context.params);
@@ -14,8 +14,7 @@ export async function GET(
     }
 
     return NextResponse.json({ success: true, data: artwork });
-  } catch (error) {
-    console.error("[API_ARTWORK_DETAIL_ERROR]", error);
-    return NextResponse.json({ success: false, message: "Failed to retrieve artwork." }, { status: 500 });
+  } catch {
+    return NextResponse.json({ success: false, message: "Failed to retrieve artwork." }, { status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "30" } });
   }
 }

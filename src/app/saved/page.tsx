@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Section } from "@/components/layout/Section";
+import { CatalogUnavailable } from "@/components/gallery/CatalogUnavailable";
 import { ArtCard } from "@/components/gallery/ArtCard";
 import { Artwork } from "@/features/artwork/data/artworks";
 import { useFavorites } from "@/features/favorites/hooks/use-favorites";
@@ -10,17 +11,18 @@ export default function SavedPage() {
     const { favorites } = useFavorites();
     const [allArtworks, setAllArtworks] = useState<Artwork[]>([]);
     const [loading, setLoading] = useState(true);
+    const [catalogError, setCatalogError] = useState(false);
 
     useEffect(() => {
         let isMounted = true;
         fetch("/api/artworks")
-            .then((res) => res.json())
+            .then(async (res) => { const data = await res.json(); if (!res.ok || !data.success || !Array.isArray(data.data)) throw new Error("Catalog unavailable"); return data; })
             .then((data) => {
                 if (isMounted && data.success && Array.isArray(data.data)) {
                     setAllArtworks(data.data);
                 }
             })
-            .catch((err) => console.warn("[SAVED_ARTWORKS_FETCH_ERROR]", err))
+            .catch(() => { if (isMounted) setCatalogError(true); })
             .finally(() => {
                 if (isMounted) setLoading(false);
             });
@@ -47,7 +49,7 @@ export default function SavedPage() {
                         <div className="w-8 h-8 border border-primary/30 border-t-primary rounded-full animate-spin mb-4" />
                         <p className="font-sans text-[11px] tracking-[0.2em] uppercase text-muted">Retrieving Archival Records...</p>
                     </div>
-                ) : savedArtworks.length > 0 ? (
+                ) : catalogError ? <CatalogUnavailable href="/saved" /> : savedArtworks.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-16">
                         {savedArtworks.map((artwork, index) => (
                             <ArtCard key={artwork.id} artwork={artwork} index={index} />

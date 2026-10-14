@@ -1,3 +1,4 @@
+import { logSecurityFailure } from "@/shared/utils/security-log";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/shared/services/supabase-admin";
 import { timingSafeEqualStr } from "@/shared/utils/crypto";
@@ -10,7 +11,7 @@ export async function POST(req: NextRequest) {
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
 
     if (!cronSecret || !token || !timingSafeEqualStr(token, cronSecret)) {
-      console.warn("[CRON_AUTH_FAIL] Unauthorized invocation of cleanup-expired endpoint.");
+      logSecurityFailure("[CRON_AUTH_FAIL] Unauthorized invocation of cleanup-expired endpoint.");
       return NextResponse.json({ success: false, message: "Unauthorized clearance." }, { status: 401 });
     }
 
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
       .lt("expires_at", nowIso);
 
     if (fetchError) {
-      console.error("[CRON_FETCH_ERROR] Failed to query expired commissions:", fetchError);
+      logSecurityFailure("[CRON_FETCH_ERROR] Failed to query expired commissions:", fetchError);
       return NextResponse.json({ success: false, message: "Query failed." }, { status: 500 });
     }
 
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
       .select("id, status");
 
     if (updateError) {
-      console.error("[CRON_UPDATE_ERROR] Failed to update commissions to expired:", updateError);
+      logSecurityFailure("[CRON_UPDATE_ERROR] Failed to update commissions to expired:", updateError);
       return NextResponse.json({ success: false, message: "Update failed." }, { status: 500 });
     }
 
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest) {
         });
       }
     } catch (auditErr) {
-      console.warn("[AUDIT_LOG_WARN] Failed to write cron audit logs:", auditErr);
+      logSecurityFailure("[AUDIT_LOG_WARN] Failed to write cron audit logs:", auditErr);
     }
 
     return NextResponse.json({
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
       message: `Successfully transitioned ${updated?.length || 0} expired commission(s).`,
     });
   } catch (error) {
-    console.error("[CRON_CLEANUP_FATAL]", error);
+    logSecurityFailure("[CRON_CLEANUP_FATAL]", error);
     return NextResponse.json({ success: false, message: "Internal server error." }, { status: 500 });
   }
 }

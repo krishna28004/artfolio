@@ -1,3 +1,4 @@
+import { logSecurityFailure } from "@/shared/utils/security-log";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getRazorpayClient } from "@/shared/services/razorpay";
@@ -50,7 +51,7 @@ export async function POST(req: Request) {
       p_amount: commission.price, p_currency: commission.currency, p_method: gatewayPayment.method || null,
     });
     if (captureError || result !== "captured") {
-      console.error("[CAPTURE_RECORD_ERROR]", captureError);
+      logSecurityFailure("[CAPTURE_RECORD_ERROR]", captureError);
       return NextResponse.json({ success: false, message: "Payment captured but recording is pending. The studio will reconcile it." }, { status: 503 });
     }
     const { data: event } = await admin.from("commission_events").select("id")
@@ -58,11 +59,11 @@ export async function POST(req: Request) {
       .order("created_at", { ascending: false }).limit(1).maybeSingle();
     if (event && commission.email) {
       await queueCommissionNotice(commissionId, event.id, commission.email, "customer");
-      if (process.env.RESEND_API_KEY) await deliverPendingNotifications(1).catch((cause) => console.error("[PAYMENT_NOTICE_ERROR]", cause));
+      if (process.env.RESEND_API_KEY) await deliverPendingNotifications(1).catch((cause) => logSecurityFailure("[PAYMENT_NOTICE_ERROR]", cause));
     }
     return NextResponse.json({ success: true, message: "Payment captured and recorded." });
   } catch (error) {
-    console.error("[VERIFY_FATAL]", error);
+    logSecurityFailure("[VERIFY_FATAL]", error);
     return NextResponse.json({ success: false, message: "Payment verification temporarily unavailable." }, { status: 503 });
   }
 }

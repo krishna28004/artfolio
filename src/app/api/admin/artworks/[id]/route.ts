@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/shared/services/supabase-admin";
 import { verifyAdminAuth } from "@/features/admin/utils/auth";
+import { z } from "zod";
+import { revalidatePath } from "next/cache";
 import { rupeesToPaise } from "@/shared/utils/money";
 import type { Database, Json } from "@/types/supabase";
 
 export async function GET(
   req: NextRequest,
-  context: { params: Promise<{ id: string }> | { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const authResult = await verifyAdminAuth(req);
@@ -26,6 +28,7 @@ export async function GET(
       return NextResponse.json({ success: false, message: "Artwork not found." }, { status: 404 });
     }
 
+    if (req.method !== "GET") { revalidatePath("/"); revalidatePath("/artwork/" + params.id); revalidatePath("/exhibition/accessible"); }
     return NextResponse.json({ success: true, data });
   } catch {
     return NextResponse.json({ success: false, message: "Internal server error." }, { status: 500 });
@@ -35,7 +38,7 @@ export async function GET(
 
 export async function PATCH(
   req: NextRequest,
-  context: { params: Promise<{ id: string }> | { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const authResult = await verifyAdminAuth(req);
@@ -44,18 +47,27 @@ export async function PATCH(
     }
 
     const params = await Promise.resolve(context.params);
-    const body = await req.json();
+    const parsed = z.object({
+      title: z.string().trim().min(1).max(200).optional(), description: z.string().max(2000).optional(),
+      medium: z.string().max(200).optional(), dimensions: z.string().max(100).optional(),
+      isAvailable: z.boolean().optional(), isFeatured: z.boolean().optional(),
+      displayOrder: z.number().int().min(0).optional(), priceInRupees: z.number().int().positive().max(10000000).nullable().optional(),
+      publicationStatus: z.enum(["draft","published","archived"]).optional(),
+    }).strict().safeParse(await req.json().catch(() => null));
+    if (!parsed.success) return NextResponse.json({ success: false, message: "Invalid artwork update." }, { status: 400 });
+    const body = parsed.data;
     const supabaseAdmin = getSupabaseAdmin();
 
     const updatePayload: Database["public"]["Tables"]["artworks"]["Update"] = {
       updated_at: new Date().toISOString(),
     };
 
+    if (body.publicationStatus) updatePayload.publication_status = body.publicationStatus;
     if (typeof body.title === "string") updatePayload.title = body.title;
     if (typeof body.description === "string") updatePayload.description = body.description;
     if (typeof body.medium === "string") updatePayload.medium = body.medium;
     if (typeof body.dimensions === "string") updatePayload.dimensions = body.dimensions;
-    if (typeof body.isAvailable === "boolean") updatePayload.is_available = body.isAvailable;
+    if (typeof body.isAvailable === "boolean") { updatePayload.is_available = body.isAvailable; updatePayload.sale_status = body.isAvailable ? "available" : "not_for_sale"; }
     if (typeof body.isFeatured === "boolean") updatePayload.is_featured = body.isFeatured;
     if (typeof body.displayOrder === "number") updatePayload.display_order = body.displayOrder;
     if (body.priceInRupees !== undefined) {
@@ -70,7 +82,7 @@ export async function PATCH(
       .single();
 
     if (error) {
-      return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+      return NextResponse.json({ success: false, message: "Artwork update could not be saved." }, { status: 500 });
     }
 
     // Audit log
@@ -82,6 +94,7 @@ export async function PATCH(
       metadata: updatePayload as unknown as Json,
     });
 
+    if (req.method !== "GET") { revalidatePath("/"); revalidatePath("/artwork/" + params.id); revalidatePath("/exhibition/accessible"); }
     return NextResponse.json({ success: true, data });
   } catch {
     return NextResponse.json({ success: false, message: "Internal server error." }, { status: 500 });
@@ -93,7 +106,7 @@ export async function PATCH(
  */
 export async function DELETE(
   req: NextRequest,
-  context: { params: Promise<{ id: string }> | { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const authResult = await verifyAdminAuth(req);
@@ -108,6 +121,7 @@ export async function DELETE(
       .from("artworks")
       .update({
         is_available: false,
+        publication_status: "archived",
         updated_at: new Date().toISOString(),
       })
       .eq("id", params.id)
@@ -115,7 +129,7 @@ export async function DELETE(
       .single();
 
     if (error) {
-      return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+      return NextResponse.json({ success: false, message: "Artwork update could not be saved." }, { status: 500 });
     }
 
     // Audit log
@@ -127,6 +141,7 @@ export async function DELETE(
       metadata: { archived: true },
     });
 
+    revalidatePath("/"); revalidatePath("/artwork/" + params.id); revalidatePath("/exhibition/accessible");
     return NextResponse.json({ success: true, message: "Artwork archived successfully.", data });
   } catch {
     return NextResponse.json({ success: false, message: "Internal server error." }, { status: 500 });

@@ -1,10 +1,12 @@
+import { logSecurityFailure } from "@/shared/utils/security-log";
+import { isCommissionIntakeEnabled } from "@/shared/utils/release-controls";
 import { NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { commissionSchema } from "@/features/commission/schema/commission-schema";
 import { supabaseAdmin } from "@/shared/services/supabase-admin";
 import { checkDistributedRateLimit, getClientIp } from "@/shared/utils/rate-limit";
 import { makeTrackingToken } from "@/features/commission/server/tracking-token";
-import { queueCommissionNotice, deliverPendingNotifications } from "@/features/commission/server/notifications";
+import { deliverPendingNotifications } from "@/features/commission/server/notifications";
 
 function sha256(value: string): string {
   return crypto.createHash("sha256").update(value).digest("hex");
@@ -16,11 +18,22 @@ async function attachReferences(id: string, claims: { id: string; token: string 
     p_commission_id: id,
     p_claims: claims.map((claim) => ({ id: claim.id, hash: sha256(claim.token) })),
   });
-  if (error) console.error("[REFERENCE_ATTACH_ERROR]", error);
+  if (error) logSecurityFailure("[REFERENCE_ATTACH_ERROR]", error);
   return !error;
 }
 
+async function ensureSubmissionEvents(id: string) {
+  const { data, error } = await supabaseAdmin.rpc("ensure_commission_submission_events", {
+    p_commission_id: id, p_owner_recipient: process.env.ADMIN_NOTIFICATION_EMAIL || process.env.ADMIN_EMAIL || null,
+  });
+  if (error || !data) return false;
+  if (process.env.RESEND_API_KEY) await deliverPendingNotifications(2).catch(() => logSecurityFailure("[NOTIFICATION_DELIVERY_ERROR]"));
+  return true;
+}
 export async function POST(req: Request) {
+  if (!isCommissionIntakeEnabled()) return NextResponse.json({ success: false, message: "New commissions are temporarily paused. Please check back later." }, {
+    status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "3600" },
+  });
   try {
     const limit = await checkDistributedRateLimit(`commission_${getClientIp(req)}`, 5, 15 * 60 * 1000);
     if (!limit.success) {
@@ -48,7 +61,7 @@ export async function POST(req: Request) {
     });
     if (error) {
       if (error.code !== "23505") {
-        console.error("[COMMISSION_INSERT_ERROR]", error);
+        logSecurityFailure("[COMMISSION_INSERT_ERROR]", error);
         return NextResponse.json({ success: false, message: "Could not save your request." }, { status: 503 });
       }
       const { data: previous } = await supabaseAdmin.from("commissions")
@@ -63,6 +76,7 @@ export async function POST(req: Request) {
       if (!(await attachReferences(previous.id, data.fileClaims))) {
         return NextResponse.json({ success: false, message: "Could not attach reference files. Please retry." }, { status: 503 });
       }
+      if (!(await ensureSubmissionEvents(previous.id))) return NextResponse.json({ success: false, message: "Request saved; acknowledgement is pending. Please retry." }, { status: 503 });
       return NextResponse.json({ success: true, id: previous.id, reference: previous.request_reference,
         trackingToken: previous.tracking_token_hash === tokenHash ? token : undefined,
         message: "Request previously received." });
@@ -70,21 +84,11 @@ export async function POST(req: Request) {
     if (!(await attachReferences(id, data.fileClaims))) {
       return NextResponse.json({ success: false, message: "Request saved, but references could not be attached. Please retry." }, { status: 503 });
     }
-    const { data: event, error: eventError } = await supabaseAdmin.from("commission_events").insert({
-      commission_id: id, actor_type: "customer", event_type: "request_received",
-      metadata: { reference },
-    }).select("id").single();
-    if (eventError) console.error("[COMMISSION_EVENT_ERROR]", eventError);
-    if (event) {
-      await queueCommissionNotice(id, event.id, data.email, "customer");
-      const ownerEmail = process.env.ADMIN_NOTIFICATION_EMAIL || process.env.ADMIN_EMAIL;
-      if (ownerEmail) await queueCommissionNotice(id, event.id, ownerEmail, "owner");
-      if (process.env.RESEND_API_KEY) await deliverPendingNotifications(2).catch((cause) => console.error("[NOTIFICATION_DELIVERY_ERROR]", cause));
-    }
+    if (!(await ensureSubmissionEvents(id))) return NextResponse.json({ success: false, message: "Request saved; acknowledgement is pending. Please retry." }, { status: 503 });
     return NextResponse.json({ success: true, id, reference, trackingToken: token,
       message: "Commission inquiry received successfully." });
   } catch (error) {
-    console.error("[COMMISSION_ROUTE_FATAL]", error);
+    logSecurityFailure("[COMMISSION_ROUTE_FATAL]", error);
     return NextResponse.json({ success: false, message: "Server encountered an unexpected error." }, { status: 500 });
   }
 }

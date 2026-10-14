@@ -1,3 +1,4 @@
+import { logSecurityFailure } from "@/shared/utils/security-log";
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqualStr } from "@/shared/utils/crypto";
 import { deliverPendingNotifications } from "@/features/commission/server/notifications";
@@ -10,7 +11,7 @@ export async function GET(req: NextRequest) {
     const result = await deliverPendingNotifications();
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
-    console.error("[NOTIFICATION_CRON_ERROR]", error);
+    logSecurityFailure("[NOTIFICATION_CRON_ERROR]", error);
     return NextResponse.json({ success: false, message: "Notification delivery failed." }, { status: 503 });
   }
 }

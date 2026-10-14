@@ -1,3 +1,4 @@
+import { logSecurityFailure } from "@/shared/utils/security-log";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { verifyAdminAuth } from "@/features/admin/utils/auth";
@@ -37,7 +38,7 @@ export async function GET(req: NextRequest) {
     if (!result) return NextResponse.json({ success: false, message: "Commission not found." }, { status: 404 });
     return NextResponse.json({ success: true, data: result }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    console.error("[PAYMENT_RECONCILE_INSPECT_ERROR]", error);
+    logSecurityFailure("[PAYMENT_RECONCILE_INSPECT_ERROR]", error);
     return NextResponse.json({ success: false, message: "Gateway inspection unavailable." }, { status: 503 });
   }
 }
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
       metadata: { payment_id: payment.id, order_id: payment.order_id } });
     return NextResponse.json({ success: true, message: "Captured payment recorded." });
   } catch (error) {
-    console.error("[PAYMENT_RECONCILE_ERROR]", error);
+    logSecurityFailure("[PAYMENT_RECONCILE_ERROR]", error);
     return NextResponse.json({ success: false, message: "Gateway reconciliation unavailable." }, { status: 503 });
   }
 }

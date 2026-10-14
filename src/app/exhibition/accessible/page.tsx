@@ -1,7 +1,8 @@
 import { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
-import { getAllArtworks } from "@/features/artwork/services/artwork-service";
+import { getArtworkCatalog } from "@/features/artwork/services/artwork-service";
+import { CatalogUnavailable } from "@/components/gallery/CatalogUnavailable";
 import { Section } from "@/components/layout/Section";
 
 export const metadata: Metadata = {
@@ -10,8 +11,11 @@ export const metadata: Metadata = {
     "A fully accessible, keyboard-navigable 2D archival exhibition of Krishna Kumar's original pencil drawings.",
 };
 
+export const revalidate = 60;
+
 export default async function AccessibleExhibitionPage() {
-  const artworks = await getAllArtworks();
+  const catalog = await getArtworkCatalog();
+  const artworks = catalog.artworks;
 
   return (
     <main id="main-content" className="flex-1 bg-background text-text min-h-screen py-20">
@@ -32,6 +36,8 @@ export default async function AccessibleExhibitionPage() {
         </header>
 
         <section aria-label="Curated Artworks" className="space-y-20">
+          {catalog.status === "unavailable" && <CatalogUnavailable href="/exhibition/accessible" />}
+          {catalog.status === "empty" && <p role="status" className="text-muted">No artworks are currently published.</p>}
           {artworks.map((art, index) => (
             <article
               key={art.id}

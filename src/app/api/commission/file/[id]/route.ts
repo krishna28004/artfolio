@@ -11,7 +11,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
   if (!limit.success) return NextResponse.json({ message: "Too many downloads." }, { status: 429 });
   const admin = getSupabaseAdmin();
   const { data: file } = await admin.from("commission_files")
-    .select("id, commission_id, kind, storage_path").eq("id", id).maybeSingle();
+    .select("id, commission_id, kind, storage_path, delivered_at").eq("id", id).maybeSingle();
   if (!file?.commission_id) return NextResponse.json({ message: "File unavailable." }, { status: 404 });
   const adminAccess = (await verifyAdminAuth(req)).authorized;
   if (!adminAccess) {
@@ -20,6 +20,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       return NextResponse.json({ message: "File unavailable." }, { status: 403 });
     }
     if (file.kind === "deliverable") {
+      if (!file.delivered_at) return NextResponse.json({ message: "Delivery is not available yet." }, { status: 403 });
       const { data: commission } = await admin.from("commissions")
         .select("status").eq("id", file.commission_id).maybeSingle();
       if (!commission || !["delivered", "completed", "fulfilled", "revision_requested"].includes(commission.status)) {
@@ -27,6 +28,10 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       }
     }
   }
+  const safePath = file.kind === "reference"
+    ? new RegExp("^staging/" + file.id + "\\.(jpg|png|webp|pdf)$", "i").test(file.storage_path)
+    : new RegExp("^deliveries/" + file.commission_id + "/" + file.id + "\\.(jpg|png|webp|pdf)$", "i").test(file.storage_path);
+  if (!safePath || file.storage_path.includes("..")) return NextResponse.json({ message: "File unavailable." }, { status: 404 });
   const { data, error } = await admin.storage.from("commission-private").createSignedUrl(file.storage_path, 60);
   if (error || !data?.signedUrl) return NextResponse.json({ message: "File temporarily unavailable." }, { status: 503 });
   await admin.from("commission_files").update({ accessed_at: new Date().toISOString() }).eq("id", id);

@@ -17,6 +17,22 @@ build/
 
 # Test and coverage outputs
 coverage/
+test-results/
+playwright-report/
+artfolio-qa/
+
+# Local database captures and rehearsal output
+backups/
+supabase/backups/
+supabase/rehearsal-output/
+*.dump
+*.backup
+*.sql.gz
+*.sql.zst
+*.sql.age
+*.db
+*.sqlite
+*.sqlite3
 
 # Logs
 *.log
@@ -26,11 +42,8 @@ yarn-error.log*
 pnpm-debug.log*
 
 # Environment files
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env*
+!.env.example
 
 # Vercel
 .vercel/

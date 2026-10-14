@@ -96,6 +96,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (!["approved", "payment_pending"].includes(commission.status) || !commission.expires_at ||
+        !Number.isFinite(new Date(commission.expires_at).getTime())) {
+      return NextResponse.json({ success: false, message: "No current payable quote is available." }, { status: 409 });
+    }
     if (commission.quote_version > 0 && commission.accepted_quote_version !== commission.quote_version) {
       return NextResponse.json({ success: false, message: "The current quote has not been accepted." }, { status: 409 });
     }
