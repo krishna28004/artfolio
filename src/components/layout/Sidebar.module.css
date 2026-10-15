@@ -1,0 +1,309 @@
+.panel {
+  position: fixed;
+  z-index: 50;
+  inset: 0 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: clamp(1.25rem, 3.5vh, 2.75rem) clamp(1rem, 1.5vw, 1.35rem) clamp(1rem, 2.5vh, 2rem);
+  border-left: 1px solid rgb(195 155 91 / 0.2);
+  background:
+    radial-gradient(ellipse at 92% 4%, rgb(176 126 57 / 0.1), transparent 38%),
+    linear-gradient(135deg, #0c0b09 0%, #080807 56%, #060605 100%);
+  box-shadow: -28px 0 90px rgb(0 0 0 / 0.55);
+  transition: transform 700ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.panelOpen {
+  transform: translateX(0);
+}
+
+.panelClosed {
+  transform: translateX(102%);
+  pointer-events: none;
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 2.75rem;
+}
+
+.wordmark {
+  display: inline-block;
+  color: #dfbd7d;
+  background: linear-gradient(100deg, #c99a51, #f7e1ad 54%, #c5964b);
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: clamp(1.5rem, 2.4vw, 2.1rem);
+  font-weight: 400;
+  letter-spacing: 0.27em;
+  line-height: 1;
+  text-decoration: none;
+  transition: filter 250ms ease;
+}
+
+.wordmark:hover {
+  filter: brightness(1.2);
+}
+
+.closeButton {
+  display: grid;
+  width: 2.9rem;
+  height: 2.9rem;
+  flex: 0 0 auto;
+  place-items: center;
+  margin-right: -0.45rem;
+  border: 1px solid transparent;
+  color: rgb(236 231 222 / 0.82);
+  background: transparent;
+  cursor: pointer;
+  transition: color 220ms ease, border-color 220ms ease, transform 220ms ease;
+}
+
+.closeButton:hover {
+  transform: rotate(90deg);
+  border-color: rgb(199 157 91 / 0.55);
+  color: #dfbd7d;
+}
+
+.closeButton:focus-visible,
+.wordmark:focus-visible,
+.menuLink:focus-visible,
+.contactLink:focus-visible {
+  outline: 2px solid #d2aa68;
+  outline-offset: 4px;
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.8rem, 2vw, 1.5rem);
+  margin-top: clamp(1.75rem, 5vh, 3.25rem);
+  color: rgb(229 224 216 / 0.74);
+  font-family: var(--font-sans), Arial, sans-serif;
+  font-size: clamp(0.65rem, 1vw, 0.9rem);
+  font-weight: 500;
+  letter-spacing: 0.35em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.headingRule {
+  height: 1px;
+  flex: 1 1 auto;
+  background: linear-gradient(90deg, rgb(220 215 205 / 0.44), rgb(220 215 205 / 0.12));
+}
+
+.headingDiamond {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 auto;
+  transform: rotate(45deg);
+  background: #c99a51;
+}
+
+.menuList {
+  display: grid;
+  gap: clamp(0.2rem, 0.9vh, 0.7rem);
+  margin-top: clamp(1.1rem, 3.4vh, 2.25rem);
+}
+
+.menuLink {
+  display: grid;
+  grid-template-columns: clamp(2.2rem, 3vw, 2.6rem) 1px minmax(0, 1fr) clamp(1.3rem, 1.6vw, 1.55rem);
+  align-items: center;
+  column-gap: clamp(0.45rem, 0.85vw, 0.7rem);
+  min-height: clamp(3.15rem, 7.4vh, 4.25rem);
+  padding: 0 clamp(0.45rem, 0.9vw, 0.75rem);
+  border: 1px solid transparent;
+  border-radius: 2px;
+  color: #e8e3db;
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: clamp(1.05rem, 1.25vw, 1.2rem);
+  font-weight: 400;
+  line-height: 1.1;
+  text-decoration: none;
+  transition: background 260ms ease, border-color 260ms ease, color 260ms ease;
+}
+
+.menuIcon {
+  justify-self: center;
+  color: rgb(233 226 215 / 0.9);
+  transition: color 260ms ease, transform 260ms ease;
+}
+
+.menuDivider {
+  width: 1px;
+  height: 58%;
+  background: linear-gradient(180deg, transparent, rgb(193 150 84 / 0.62) 18% 82%, transparent);
+}
+
+.menuLabel {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.menuArrow {
+  justify-self: end;
+  color: rgb(229 224 216 / 0.56);
+  transition: color 260ms ease, transform 260ms ease;
+}
+
+.menuLink:hover,
+.menuLink:focus-visible,
+.activeLink {
+  border-color: rgb(203 157 86 / 0.24);
+  background: linear-gradient(100deg, rgb(173 125 62 / 0.23), rgb(173 125 62 / 0.08) 52%, rgb(173 125 62 / 0.015));
+  color: #f3e5ca;
+}
+
+.menuLink:hover .menuIcon,
+.menuLink:focus-visible .menuIcon,
+.activeLink .menuIcon,
+.menuLink:hover .menuArrow,
+.menuLink:focus-visible .menuArrow,
+.activeLink .menuArrow {
+  color: #d4aa68;
+}
+
+.menuLink:hover .menuIcon,
+.menuLink:focus-visible .menuIcon {
+  transform: scale(1.06);
+}
+
+.menuLink:hover .menuArrow,
+.menuLink:focus-visible .menuArrow {
+  transform: translateX(5px);
+}
+
+.contactBlock {
+  margin-top: auto;
+  padding-top: clamp(1.15rem, 3vh, 2rem);
+  border-top: 1px solid rgb(229 224 216 / 0.2);
+}
+
+.contactLabel {
+  margin: 0 0 0.85rem;
+  color: rgb(229 224 216 / 0.65);
+  font-family: var(--font-sans), Arial, sans-serif;
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.33em;
+  text-transform: uppercase;
+}
+
+.contactLink {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.7rem, 1.4vw, 1.2rem);
+  width: fit-content;
+  max-width: 100%;
+  color: #e8e3db;
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: clamp(0.85rem, 1.35vw, 1.3rem);
+  line-height: 1.45;
+  text-decoration: none;
+  transition: color 220ms ease;
+}
+
+.contactLink svg {
+  flex: 0 0 auto;
+  color: #d4aa68;
+}
+
+.contactLink span {
+  overflow-wrap: anywhere;
+}
+
+.contactLink:hover {
+  color: #d4aa68;
+}
+
+@media (min-width: 640px) {
+  .panel {
+    width: clamp(360px, 34vw, 420px);
+  }
+}
+
+@media (max-width: 420px) {
+  .panel {
+    padding-right: 1rem;
+    padding-left: 1rem;
+  }
+
+  .menuList {
+    gap: 0.15rem;
+    margin-top: 0.9rem;
+  }
+
+  .sectionHeading {
+    margin-top: 1.35rem;
+  }
+
+  .menuLink {
+    grid-template-columns: 2rem 1px minmax(0, 1fr) 1.35rem;
+    column-gap: 0.55rem;
+    min-height: 2.75rem;
+    padding-inline: 0.4rem;
+    font-size: clamp(1rem, 4.5vw, 1.12rem);
+    letter-spacing: -0.015em;
+  }
+
+  .menuIcon {
+    width: 1.35rem;
+    height: 1.35rem;
+  }
+
+  .menuArrow {
+    width: 1.2rem;
+    height: 1.2rem;
+  }
+
+  .contactLink {
+    font-size: 0.82rem;
+  }
+}
+
+@media (max-height: 700px) {
+  .panel {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+  }
+
+  .sectionHeading {
+    margin-top: 1.15rem;
+  }
+
+  .menuList {
+    gap: 0.15rem;
+    margin-top: 0.8rem;
+  }
+
+  .menuLink {
+    min-height: 3.1rem;
+  }
+
+  .contactBlock {
+    padding-top: 0.8rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel,
+  .wordmark,
+  .closeButton,
+  .menuLink,
+  .menuIcon,
+  .menuArrow,
+  .contactLink {
+    transition-duration: 0.01ms;
+  }
+}

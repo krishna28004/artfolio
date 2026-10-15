@@ -15,26 +15,60 @@ import { computeHmacSha256 } from "../src/shared/utils/crypto.ts";
 import { getClientIp, checkDistributedRateLimit } from "../src/shared/utils/rate-limit.ts";
 import { logSecurityFailure } from "../src/shared/utils/security-log.ts";
 import { GET as ownerList } from "../src/app/api/admin/commissions/route.ts";
+import { GET as ownerSession, POST as completeOwnerSession } from "../src/app/api/admin/session/route.ts";
+import { POST as setCommissionAvailability } from "../src/app/api/admin/commission-availability/route.ts";
 process.env.ADMIN_EMAIL = "owner@example.test";
 process.env.ADMIN_API_SECRET = "isolated-local-security-admin-secret";
 delete process.env.ADMIN_NOTIFICATION_EMAIL;
 const ownerId=randomUUID(),sessionId=randomUUID();
-type Options={confirmed?:boolean;email?:string;aal?:string;active?:boolean;claimsOwner?:string;claimsSession?:string;claimsError?:boolean;sessionError?:boolean};
-function authFixture(options:Options={}){
- const o={confirmed:true,email:process.env.ADMIN_EMAIL,aal:"aal2",active:true,claimsOwner:ownerId,claimsSession:sessionId,...options};
+type Options={confirmed?:boolean;email?:string;aal?:string;active?:boolean;alert?:boolean;claimsOwner?:string;claimsSession?:string;claimsError?:boolean;sessionError?:boolean};
+function authFixture(options:Options={}, extraRpc?:(name:string,args:Record<string,unknown>)=>unknown){
+ const o={confirmed:true,email:process.env.ADMIN_EMAIL,aal:"aal2",active:true,alert:true,claimsOwner:ownerId,claimsSession:sessionId,...options};
  _setAuthClientFactoryForTesting((async()=>({auth:{
   async getUser(){return{data:{user:{id:ownerId,email:o.email,email_confirmed_at:o.confirmed?"2026-01-01":null}},error:null};},
   mfa:{async getAuthenticatorAssuranceLevel(){return{data:{currentLevel:o.aal},error:null};}},
   async getClaims(){return{data:{claims:{sub:o.claimsOwner,session_id:o.claimsSession,aal:o.aal}},error:o.claimsError?{}:null};},
  }})) as never);
- _setAdminInstanceForTesting({async rpc(name:string,args:Record<string,unknown>){
-  assert.equal(name,"is_owner_session_active");assert.equal(args.p_user_id,ownerId);assert.equal(args.p_session_id,sessionId);
+ _setAdminInstanceForTesting({from(name:string){
+  assert.equal(name,"owner_login_alerts");
+  const q={select(){return q;},eq(){return q;},async maybeSingle(){return{data:o.alert?{session_id:sessionId}:null,error:null};}};
+  return q;
+ },async rpc(name:string,args:Record<string,unknown>){
+  if(name==="owner_session_expires_at")return{data:new Date(Date.now()+60_000).toISOString(),error:null};
+  if(name!=="is_owner_session_active")return extraRpc?.(name,args) ?? {data:null,error:{code:"UNEXPECTED_RPC"}};
+  assert.equal(args.p_user_id,ownerId);assert.equal(args.p_session_id,sessionId);
   return{data:o.active,error:o.sessionError?{}:null};
  }} as never);
 }
 afterEach(()=>{_setAuthClientFactoryForTesting(null);_setAdminInstanceForTesting(null);delete process.env.ADMIN_NOTIFICATION_EMAIL;});
 const ownerRequest=(route:string,body:object={})=>new NextRequest("http://localhost"+route,{method:"POST",headers:{"content-type":"application/json","x-admin-key":process.env.ADMIN_API_SECRET!},body:JSON.stringify(body)});
 test("verified owner AAL2 and active session are authorized",async()=>{authFixture();assert.equal((await verifyAdminAuth()).authorized,true);});
+test("unnotified owner session cannot enter Studio, but can complete login alert",async()=>{
+ authFixture({alert:false});
+ assert.equal((await verifyAdminAuth()).authorized,false);
+ assert.equal((await verifyAdminAuth(undefined,{requireLoginAlert:false})).authorized,true);
+});
+test("Studio session status requires the delivered login alert",async()=>{
+ authFixture({alert:false});
+ assert.equal((await ownerSession(new NextRequest("http://localhost/api/admin/session"))).status,401);
+ authFixture();
+ const response=await ownerSession(new NextRequest("http://localhost/api/admin/session"));
+ assert.equal(response.status,200);
+ assert.ok(Date.parse((await response.json()).expiresAt)>Date.now());
+});
+test("Studio sign-in fails closed when the login email cannot be sent",async()=>{
+ authFixture({alert:false});
+ const priorKey=process.env.RESEND_API_KEY,priorFrom=process.env.RESEND_FROM_EMAIL;
+ delete process.env.RESEND_API_KEY;delete process.env.RESEND_FROM_EMAIL;
+ try {
+  const response=await completeOwnerSession(new NextRequest("http://localhost/api/admin/session",{method:"POST"}));
+  assert.equal(response.status,503);
+  assert.equal((await verifyAdminAuth()).authorized,false);
+ } finally {
+  if(priorKey)process.env.RESEND_API_KEY=priorKey;
+  if(priorFrom)process.env.RESEND_FROM_EMAIL=priorFrom;
+ }
+});
 test("unconfirmed and foreign users cannot impersonate owner metadata",async()=>{
  for(const o of [{confirmed:false},{email:"attacker@example.test"}]){authFixture(o);assert.equal((await verifyAdminAuth()).authorized,false);}
 });
@@ -53,6 +87,16 @@ test("API key callers cannot bypass cross-origin mutation checks",async()=>{
  const request=new NextRequest("http://localhost/api/admin/commission-action",{method:"POST",headers:{"x-admin-key":process.env.ADMIN_API_SECRET!,origin:"https://attacker.example"}});
  assert.equal((await verifyAdminAuth(request)).authorized,false);
  assert.equal((await verifyAdminAuth(ownerRequest("/api/admin/commission-action"))).authorized,true);
+});
+test("commission availability requires owner authorization and changes through the audited RPC",async()=>{
+ let rpcName="";let rpcArgs:Record<string,unknown>={};
+ authFixture({},(name,args)=>{rpcName=name;rpcArgs=args;return{data:true,error:null};});
+ const id=await setCommissionAvailability(ownerRequest("/api/admin/commission-availability",{acceptingRequests:true}));
+ assert.equal(id.status,200);assert.equal(rpcName,"set_commission_intake_enabled");
+ assert.equal(rpcArgs.p_enabled,true);assert.equal(rpcArgs.p_actor,"owner@example.test");
+ authFixture({email:"attacker@example.test"},()=>{throw Error("unauthorized-must-not-write");});
+ const unauthorized=new NextRequest("http://localhost/api/admin/commission-availability",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({acceptingRequests:false})});
+ assert.equal((await setCommissionAvailability(unauthorized)).status,401);
 });
 function downloadFixture(released:boolean,pathOverride?:string){
  const id=randomUUID(),fileId=randomUUID(),hash=hashAccessToken("isolated-customer-proof");

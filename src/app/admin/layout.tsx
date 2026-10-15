@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
@@ -8,12 +9,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const router = useRouter();
 
-  // Do not wrap login page with the admin navigation
-  if (pathname === "/admin/login") {
-    return <>{children}</>;
-  }
-
-  const handleSignOut = async () => {
+  const handleSignOut = useCallback(async () => {
+    sessionStorage.removeItem("artfolio-studio-expires-at");
     try {
       const supabase = createClient();
       await supabase.auth.signOut();
@@ -22,7 +19,40 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     } catch {
       router.push("/admin/login");
     }
-  };
+  }, [router]);
+
+  useEffect(() => {
+    if (pathname === "/admin/login") return;
+    let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+    const check = async () => {
+      try {
+        const response = await fetch("/api/admin/session", { cache: "no-store" });
+        if (response.status === 401) return void handleSignOut();
+        if (!response.ok) return;
+        const { expiresAt } = await response.json() as { expiresAt: string };
+        const remaining = Date.parse(expiresAt) - Date.now();
+        if (!Number.isFinite(remaining) || remaining <= 0) return void handleSignOut();
+        sessionStorage.setItem("artfolio-studio-expires-at", expiresAt);
+        if (deadlineTimer) clearTimeout(deadlineTimer);
+        deadlineTimer = setTimeout(() => void handleSignOut(), remaining);
+      } catch {
+        const saved = sessionStorage.getItem("artfolio-studio-expires-at");
+        if (saved && Date.parse(saved) <= Date.now()) void handleSignOut();
+      }
+    };
+    void check();
+    const interval = setInterval(() => void check(), 60_000);
+    const onVisible = () => { if (document.visibilityState === "visible") void check(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      if (deadlineTimer) clearTimeout(deadlineTimer);
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [pathname, handleSignOut]);
+
+  // Do not wrap login page with the admin navigation.
+  if (pathname === "/admin/login") return <>{children}</>;
 
   const navLinks = [
     { href: "/admin", label: "Dashboard" },

@@ -31,7 +31,7 @@ async function ensureSubmissionEvents(id: string) {
   return true;
 }
 export async function POST(req: Request) {
-  if (!isCommissionIntakeEnabled()) return NextResponse.json({ success: false, message: "New commissions are temporarily paused. Please check back later." }, {
+  if (!(await isCommissionIntakeEnabled())) return NextResponse.json({ success: false, message: "New commissions are temporarily paused. Please check back later." }, {
     status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "3600" },
   });
   try {

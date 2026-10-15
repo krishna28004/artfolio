@@ -45,6 +45,7 @@ interface MockDb {
   payment_events: Record<string, any>;
   commission_refunds: Record<string, any>;
   notification_jobs: Record<string, any>;
+  commission_intake_settings: Record<string, any>;
 }
 
 function createMockSupabase(db: MockDb) {
@@ -285,6 +286,7 @@ describe("ARTfolio Phase 2 Security Hardening & Regression Tests", () => {
       payment_events: {},
       commission_refunds: {},
       notification_jobs: {},
+      commission_intake_settings: { 1: { id: 1, accepting_requests: true } },
     };
     _setAdminInstanceForTesting(createMockSupabase(mockDb));
   });

@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import { CatalogUnavailable } from "@/components/gallery/CatalogUnavailable";
 import { getArtworkById, ArtworkCatalogError } from "@/features/artwork/services/artwork-service";
 import { serializeJsonLd } from "@/shared/utils/html";
+import { formatArtworkDimensions } from "@/features/artwork/utils/format-artwork";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -27,9 +28,11 @@ export async function generateMetadata(props: PageProps): Promise<Metadata> {
     };
   }
 
+  const dimensions = formatArtworkDimensions(artwork.dimensions);
+
   return {
     title: `${artwork.title} by ${artwork.artist} | ARTfolio`,
-    description: artwork.description || `Original ${artwork.medium} artwork by ${artwork.artist}. Dimensions: ${artwork.dimensions}.`,
+    description: artwork.description || `Original ${artwork.medium} artwork by ${artwork.artist}. Dimensions: ${dimensions}.`,
     openGraph: {
       title: `${artwork.title} | ARTfolio`,
       description: artwork.description || `Original artwork by ${artwork.artist}.`,
@@ -55,6 +58,8 @@ export default async function ArtworkPage(props: PageProps) {
   if (!artwork) {
     notFound();
   }
+
+  const dimensions = formatArtworkDimensions(artwork.dimensions);
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -106,7 +111,7 @@ export default async function ArtworkPage(props: PageProps) {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-y-16 lg:gap-x-20">
           {/* ARTWORK (Domination: 7 Columns) */}
           <div className="lg:col-span-7">
-            <ArtworkDisplay title={artwork.title} imageUrl={artwork.imageUrl} imageUrls={artwork.imageUrls} />
+            <ArtworkDisplay title={artwork.title} imageUrl={artwork.imageUrl} imageUrls={artwork.imageUrls} thumbnailUrl={artwork.thumbnailUrl} />
           </div>
 
           {/* INFORMATION (Restraint: 5 Columns) */}
@@ -117,7 +122,7 @@ export default async function ArtworkPage(props: PageProps) {
               artist={artwork.artist}
               year={artwork.year.toString()}
               medium={artwork.medium}
-              dimensions={artwork.dimensions}
+              dimensions={dimensions}
               description={artwork.description}
             />
           </div>

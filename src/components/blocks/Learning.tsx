@@ -2,8 +2,8 @@
 import { Section } from "@/components/layout/Section";
 
 const TUTORIAL_VIDEOS = [
-    { id: 1, title: "Drawing Tutorial — Pencil Sketch Techniques", imageThumbnail: "https://img.youtube.com/vi/6DwZvfW2YKs/maxresdefault.jpg", link: "https://youtu.be/6DwZvfW2YKs" },
-    { id: 2, title: "Realistic Portrait Drawing Tutorial", imageThumbnail: "https://img.youtube.com/vi/wv1nQwL7coE/maxresdefault.jpg", link: "https://youtu.be/wv1nQwL7coE" }
+    { id: 1, title: "Drawing Tutorial — Pencil Sketch Techniques", imageThumbnail: "https://img.youtube.com/vi/6DwZvfW2YKs/maxresdefault.jpg", fallbackThumbnail: "https://img.youtube.com/vi/6DwZvfW2YKs/hqdefault.jpg", link: "https://youtu.be/6DwZvfW2YKs" },
+    { id: 2, title: "Realistic Portrait Drawing Tutorial", imageThumbnail: "https://img.youtube.com/vi/wv1nQwL7coE/maxresdefault.jpg", fallbackThumbnail: "https://img.youtube.com/vi/wv1nQwL7coE/hqdefault.jpg", link: "https://youtu.be/wv1nQwL7coE" }
 ];
 
 export function Learning() {
@@ -35,6 +35,14 @@ export function Learning() {
                                     <img
                                         src={video.imageThumbnail}
                                         alt={video.title}
+                                        onError={(event) => {
+                                            const image = event.currentTarget;
+                                            if (image.src !== video.fallbackThumbnail) {
+                                                image.src = video.fallbackThumbnail;
+                                            } else {
+                                                image.style.display = "none";
+                                            }
+                                        }}
                                         className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-100 group-hover:scale-105 transition-all duration-[1000ms] grayscale group-hover:grayscale-0"
                                     />
                                     {/* Play Button Overlay */}

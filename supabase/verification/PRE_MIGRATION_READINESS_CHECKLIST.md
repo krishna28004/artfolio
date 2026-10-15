@@ -5,10 +5,10 @@
 ## What the existing inventory does not establish
 
 - Project ownership, exact project reference, selected branch, or why the branch is labelled `PRODUCTION`. Those are Dashboard checks, not SQL in this repository.
-- Whether the recorded migration versions correspond to the **current bytes** of all 11 files, whether a prior SQL Editor application went unrecorded, or whether the database is partly installed. The bundle guard checks only for public ordinary/partitioned tables, not migration history, views, functions, buckets, or Storage objects.
+- Whether the recorded migration versions correspond to the **current bytes** of all 13 files, whether a prior SQL Editor application went unrecorded, or whether the database is partly installed. The bundle guard checks only for public ordinary/partitioned tables, not migration history, views, functions, buckets, or Storage objects.
 - Complete privilege state: schema, sequence, default and inherited/effective grants; column grants beyond `artwork_views`; and all functions (including non-`SECURITY DEFINER` functions and `artfolio_private`). `information_schema` grant views can be limited by the inspection role.
 - RLS state on Storage tables, policy `permissive` mode, effective API-role access, function ownership, and the SQL execution role's ability to create policies on `storage.objects`.
-- Auth column **types**, `auth.users`/MFA schema presence, and the execution role's `SELECT` privilege on `auth.sessions`.
+- Auth column **types**, including `auth.sessions.created_at`, `auth.users`/MFA schema presence, and the execution role's `SELECT` privilege on `auth.sessions`.
 - Required Storage column types and privileges; the `artworks-private` bucket; object counts in all three buckets; and whether an existing `artworks-public` bucket contains objects that would become public.
 - Existing artwork publication/sale distribution, active and draft museum-slot collisions, and whether legacy rows would be changed by the backfills. The existing duplicate notices do not cover draft slots or publication-aware active slots.
 - A recoverable backup and a documented, tested restore path. SQL metadata alone cannot prove either.
@@ -43,7 +43,7 @@ ORDER BY n.nspname, c.relkind, c.relname;
 COMMIT;
 ```
 
-If migration history exists, the existing inventory prints recorded **version numbers**. Compare every version privately with the 11-file manifest and the actual schema. A recorded version does not prove its SQL bytes match today's edited historical file. If public application tables, relevant views/functions, or unexpected history exist, **do not use the fresh-project bundle**; prepare a reviewed forward-only reconciliation instead.
+If migration history exists, the existing inventory prints recorded **version numbers**. Compare every version privately with the 13-file manifest and the actual schema. A recorded version does not prove its SQL bytes match today's edited historical file. If public application tables, relevant views/functions, or unexpected history exist, **do not use the fresh-project bundle**; prepare a reviewed forward-only reconciliation instead.
 
 Inspect complete explicit ACLs and effective privileges for `anon`, `authenticated`, and `service_role`, including inherited roles. A null ACL means PostgreSQL defaults, not proof of denial. Review every unexpected grant before execution.
 
@@ -138,7 +138,7 @@ ORDER BY schemaname,tablename,policyname;
 COMMIT;
 ```
 
-Check required Auth/Storage columns and types. The bundle requires `auth.sessions(id,user_id,not_after)`, `storage.buckets(id,name,public,file_size_limit,allowed_mime_types)`, and `storage.objects(bucket_id)`. It also requires roles `anon`, `authenticated`, and `service_role`. After confirming the tables exist, verify that the chosen execution role can read `auth.sessions`, insert/update `storage.buckets`, and is authorized to create a policy on `storage.objects` (ownership or equivalent administrative privilege).
+Check required Auth/Storage columns and types. The bundle requires `auth.sessions(id,user_id,not_after,created_at)`, `storage.buckets(id,name,public,file_size_limit,allowed_mime_types)`, and `storage.objects(bucket_id)`. It also requires roles `anon`, `authenticated`, and `service_role`. After confirming the tables exist, verify that the chosen execution role can read `auth.sessions`, insert/update `storage.buckets`, and is authorized to create a policy on `storage.objects` (ownership or equivalent administrative privilege).
 
 ```sql
 BEGIN TRANSACTION READ ONLY;
@@ -199,7 +199,7 @@ If `public.commissions.request_reference` exists, the existing inventory already
 ## Gate C — migration-history reconciliation
 
 1. Match the Dashboard migration versions, table/column/index/constraint inventory, policies, grants, and bucket state to the manifest and runbook. Treat a version whose hosted SQL differs from a locally edited historical file as a different migration; do not replay it.
-2. Prefer an approved migration method that records history consistently. If SQL Editor is deliberately chosen for the guarded bundle, record the exact project/branch, approver, execution role, timestamp, bundle SHA-256, 11 source hashes, transaction outcome, and post-application schema evidence in a separate deployment ledger. SQL Editor does **not** register those 11 CLI versions.
+2. Prefer an approved migration method that records history consistently. If SQL Editor is deliberately chosen for the guarded bundle, record the exact project/branch, approver, execution role, timestamp, bundle SHA-256, 13 source hashes, transaction outcome, and post-application schema evidence in a separate deployment ledger. SQL Editor does **not** register those 13 CLI versions.
 3. Before any later CLI deployment, compare recorded CLI history with that ledger and the actual schema. Stop if the CLI proposes replaying applied statements. Create a reviewed forward-only baseline/repair plan through the supported deployment workflow; do **not** insert fabricated versions, edit `supabase_migrations.schema_migrations`, or use `db push`/`db reset` to force agreement.
 
 ## Gate D — publication-coordinate regression proposal (no production edit here)

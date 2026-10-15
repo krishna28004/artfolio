@@ -476,9 +476,10 @@ export default function AdminCommissionDetailPage({
       <section className="border border-outline-variant/20 p-6 md:p-8 space-y-5">
         <h2 className="font-serif text-2xl">Studio workflow</h2>
         <p className="text-xs text-muted">Request {commission.request_reference || commission.id} · Quote version {commission.quote_version || 0}</p>
-        <label htmlFor="studioMessage" className="block text-xs uppercase tracking-widest text-muted">Reply, progress update, or reason</label>
+        <label htmlFor="studioMessage" className="block text-xs uppercase tracking-widest text-muted">Reply, clarification request, progress update, or reason</label>
         <textarea id="studioMessage" value={studioMessage} onChange={(event) => setStudioMessage(event.target.value)} rows={3}
           className="w-full bg-transparent border border-white/20 p-3" maxLength={2000} />
+        <p className="text-xs text-muted">Use the reply action to ask for missing details. Customers can respond from their private tracking page.</p>
         <div className="flex flex-wrap gap-3">
           {(["reply", ...(commission.status === "paid" ? ["start"] : []),
             ...(commission.status === "in_progress" ? ["progress", "ready"] : []),
@@ -488,7 +489,7 @@ export default function AdminCommissionDetailPage({
             "rotate_token"]).map((action) =>
               <button key={action} type="button" disabled={actionLoading} onClick={() => void runWorkflowAction(action)}
                 className="border border-white/25 px-4 py-2 text-xs uppercase tracking-wider hover:border-primary disabled:opacity-50">
-                {action.replaceAll("_", " ")}</button>)}
+                {action === "reply" ? "Send reply / request clarification" : action.replaceAll("_", " ")}</button>)}
         </div>
         {["in_progress", "revision_requested", "ready_for_delivery", "delivered"].includes(commission.status) &&
           <div className="border-t border-white/15 pt-5 space-y-3">

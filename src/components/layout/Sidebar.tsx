@@ -1,6 +1,19 @@
 "use client";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { ArrowRight, BookOpen, Heart, Images, LogIn, Mail, Monitor, PenLine, UserRound, X, type LucideIcon } from "lucide-react";
+import styles from "./Sidebar.module.css";
+
+const menuItems: { label: string; href: string; icon: LucideIcon }[] = [
+    { label: "Artworks", href: "/artworks", icon: Images },
+    { label: "Saved Collection", href: "/saved", icon: Heart },
+    { label: "Digital Exhibition", href: "/exhibition", icon: Monitor },
+    { label: "Commission", href: "/commission", icon: PenLine },
+    { label: "Learning", href: "/learning", icon: BookOpen },
+    { label: "Studio Login", href: "/admin/login", icon: LogIn },
+    { label: "About", href: "/#about", icon: UserRound },
+];
 
 interface SidebarProps {
     isOpen: boolean;
@@ -8,9 +21,18 @@ interface SidebarProps {
 }
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
+    const pathname = usePathname();
     const [mounted, setMounted] = useState(false);
+    const [currentHash, setCurrentHash] = useState("");
     const panelRef = useRef<HTMLDivElement>(null);
     const closeRef = useRef<HTMLButtonElement>(null);
+
+    useEffect(() => {
+        const updateHash = () => setCurrentHash(window.location.hash);
+        updateHash();
+        window.addEventListener("hashchange", updateHash);
+        return () => window.removeEventListener("hashchange", updateHash);
+    }, [pathname]);
 
     useEffect(() => {
         queueMicrotask(() => {
@@ -58,48 +80,50 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 aria-modal={isOpen}
                 aria-hidden={!isOpen}
                 inert={!isOpen}
-                className={`fixed top-0 right-0 h-full w-full max-w-md bg-surface-lowest border-l border-white/5 z-50 pt-20 px-10 md:px-16 pb-10 flex flex-col overflow-y-auto transition-transform duration-700 ease-editorial shadow-ambient ${isOpen ? "translate-x-0" : "translate-x-full"}`}
+                className={`${styles.panel} ${isOpen ? styles.panelOpen : styles.panelClosed}`}
             >
-                {/* Close Button X */}
-                <button
-                    ref={closeRef}
-                    onClick={onClose}
-                    aria-label="Close menu"
-                    className="absolute top-6 right-8 w-11 h-11 flex items-center justify-center text-muted hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary transition-colors group"
-                >
-                    <div className="relative w-6 h-6">
-                        <div className="absolute top-1/2 left-0 w-full h-[1px] bg-current rotate-45 transform origin-center transition-transform group-hover:rotate-[135deg] duration-700"></div>
-                        <div className="absolute top-1/2 left-0 w-full h-[1px] bg-current -rotate-45 transform origin-center transition-transform group-hover:-rotate-[135deg] duration-700"></div>
-                    </div>
-                </button>
+                <div className={styles.topBar}>
+                    <Link href="/" onClick={onClose} className={styles.wordmark} aria-label="Artfolio home">ARTFOLIO</Link>
+                    <button
+                        ref={closeRef}
+                        onClick={onClose}
+                        aria-label="Close menu"
+                        className={styles.closeButton}
+                    >
+                        <X aria-hidden="true" size={27} strokeWidth={1.1} />
+                    </button>
+                </div>
 
-                <nav className="flex flex-col gap-5 sm:gap-7 flex-1 mt-10">
-                    <Link href="/#gallery" onClick={onClose} className="font-serif text-[32px] text-text hover:text-primary transition-colors tracking-wide duration-[600ms]">
-                        Artworks
-                    </Link>
-                    <Link href="/saved" onClick={onClose} className="font-serif text-[32px] text-text hover:text-primary transition-colors tracking-wide duration-[600ms]">
-                        Saved Collection
-                    </Link>
-                    <Link href="/exhibition" onClick={onClose} className="font-serif text-[32px] text-text/70 hover:text-primary transition-colors tracking-wide duration-[600ms]">
-                        Digital Exhibition
-                    </Link>
-                    <Link href="/commission" onClick={onClose} className="font-serif text-[32px] text-text hover:text-primary transition-colors tracking-wide duration-[600ms]">
-                        Commission
-                    </Link>
-                    <Link href="/learning" onClick={onClose} className="font-serif text-[32px] text-text hover:text-primary transition-colors tracking-wide duration-[600ms]">
-                        Learning
-                    </Link>
-                    <Link href="/admin/login" onClick={onClose} className="font-serif text-[32px] text-text hover:text-primary transition-colors tracking-wide duration-[600ms]">
-                        Studio Login
-                    </Link>
-                    <Link href="/#about" onClick={onClose} className="font-serif text-[32px] text-text hover:text-primary transition-colors tracking-wide duration-[600ms]">
-                        About
-                    </Link>
+                <div className={styles.sectionHeading}>
+                    <span>Explore Artfolio</span>
+                    <span className={styles.headingRule} aria-hidden="true" />
+                    <span className={styles.headingDiamond} aria-hidden="true" />
+                </div>
+
+                <nav aria-label="Site navigation" className={styles.menuList}>
+                    {menuItems.map(({ label, href, icon: Icon }) => {
+                        const isCurrent = href === `${pathname}${currentHash}`;
+                        return <Link
+                            key={label}
+                            href={href}
+                            onClick={onClose}
+                            aria-current={isCurrent ? "page" : undefined}
+                            className={`${styles.menuLink} ${isCurrent ? styles.activeLink : ""}`}
+                        >
+                            <Icon aria-hidden="true" size={29} strokeWidth={1.45} className={styles.menuIcon} />
+                            <span className={styles.menuDivider} aria-hidden="true" />
+                            <span className={styles.menuLabel}>{label}</span>
+                            <ArrowRight aria-hidden="true" size={25} strokeWidth={1.25} className={styles.menuArrow} />
+                        </Link>;
+                    })}
                 </nav>
 
-                <div className="mt-auto border-t border-white/10 pt-8 flex flex-col gap-4">
-                    <p className="font-sans text-[11px] uppercase tracking-[0.2em] text-muted">Contact</p>
-                    <a href="mailto:krishnakumar2811004@gmail.com" className="font-sans text-[14px] text-text hover:text-primary transition-colors">krishnakumar2811004@gmail.com</a>
+                <div className={styles.contactBlock}>
+                    <p className={styles.contactLabel}>Contact</p>
+                    <a href="mailto:krishnakumar2811004@gmail.com" className={styles.contactLink}>
+                        <Mail aria-hidden="true" size={25} strokeWidth={1.5} />
+                        <span>krishnakumar2811004@gmail.com</span>
+                    </a>
                 </div>
             </div>
         </>

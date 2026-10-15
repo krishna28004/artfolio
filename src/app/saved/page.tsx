@@ -52,7 +52,7 @@ export default function SavedPage() {
                 ) : catalogError ? <CatalogUnavailable href="/saved" /> : savedArtworks.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-16">
                         {savedArtworks.map((artwork, index) => (
-                            <ArtCard key={artwork.id} artwork={artwork} index={index} />
+                            <ArtCard key={artwork.id} artwork={artwork} index={index} priority={index === 0} />
                         ))}
                     </div>
                 ) : (

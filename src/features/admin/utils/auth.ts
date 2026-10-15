@@ -11,6 +11,8 @@ export function _setAuthClientFactoryForTesting(factory: typeof createClient | n
 export interface AdminAuthResult {
   authorized: boolean;
   userEmail?: string;
+  userId?: string;
+  sessionId?: string;
   source?: "session" | "api_key";
   error?: string;
 }
@@ -26,7 +28,7 @@ export interface AdminAuthResult {
  * 2. A secure server-to-server header (x-admin-key, x-admin-secret, or Bearer token)
  *    matching ADMIN_API_SECRET / ADMIN_API_KEY verified in constant time.
  */
-export async function verifyAdminAuth(req?: NextRequest, options: { requireMfa?: boolean } = {}): Promise<AdminAuthResult> {
+export async function verifyAdminAuth(req?: NextRequest, options: { requireMfa?: boolean; requireLoginAlert?: boolean } = {}): Promise<AdminAuthResult> {
   const adminEmail = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
   if (!adminEmail) return { authorized: false, error: "Owner identity is not configured." };
 
@@ -96,7 +98,18 @@ export async function verifyAdminAuth(req?: NextRequest, options: { requireMfa?:
       return { authorized: false, error: "Owner session was revoked or could not be verified." };
     }
 
-    return { authorized: true, userEmail: sessionEmail, source: "session" };
+    // The MFA bootstrap and login-completion endpoint are the only routes that
+    // can run before the per-session login alert has been delivered.
+    if (options.requireMfa !== false && options.requireLoginAlert !== false) {
+      const { data: alert, error: alertError } = await getSupabaseAdmin()
+        .from("owner_login_alerts").select("session_id")
+        .eq("session_id", sessionId).eq("user_id", user.id).maybeSingle();
+      if (alertError || !alert) {
+        return { authorized: false, error: "Studio login notification is not complete." };
+      }
+    }
+
+    return { authorized: true, userEmail: sessionEmail, userId: user.id, sessionId, source: "session" };
   } catch {
     return { authorized: false, error: "Authentication check unavailable." };
   }

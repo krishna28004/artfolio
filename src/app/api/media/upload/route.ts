@@ -10,7 +10,7 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const CONTENT_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
 
 export async function POST(req: NextRequest) {
-  if (!isCommissionIntakeEnabled()) return NextResponse.json({ success: false, message: "New commissions are temporarily paused. Please check back later." }, {
+  if (!(await isCommissionIntakeEnabled())) return NextResponse.json({ success: false, message: "New commissions are temporarily paused. Please check back later." }, {
     status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "3600" },
   });
   try {

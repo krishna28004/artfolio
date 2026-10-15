@@ -61,6 +61,24 @@ type NotificationJobRow = {
 export interface Database {
   public: {
     Tables: {
+      owner_login_alerts: {
+        Row: { session_id: string; user_id: string; notified_at: string };
+        Insert: { session_id: string; user_id: string; notified_at?: string };
+        Update: never;
+        Relationships: [];
+      };
+      commission_intake_settings: {
+        Row: { id: number; accepting_requests: boolean; updated_at: string; updated_by: string };
+        Insert: Partial<Database["public"]["Tables"]["commission_intake_settings"]["Row"]>;
+        Update: Partial<Database["public"]["Tables"]["commission_intake_settings"]["Row"]>;
+        Relationships: [];
+      };
+      commission_intake_events: {
+        Row: { id: string; accepting_requests: boolean; actor: string; changed_at: string };
+        Insert: Partial<Database["public"]["Tables"]["commission_intake_events"]["Row"]>;
+        Update: never;
+        Relationships: [];
+      };
       notification_jobs: {
         Row: NotificationJobRow;
         Insert: Pick<NotificationJobRow, "commission_id" | "dedupe_key" | "recipient" | "template"> & Partial<NotificationJobRow>;
@@ -423,6 +441,10 @@ export interface Database {
       [_ in never]: never;
     };
     Functions: {
+      set_commission_intake_enabled: {
+        Args: { p_enabled: boolean; p_actor: string };
+        Returns: boolean;
+      };
       commission_unread_counts: { Args: Record<string, never>; Returns: { commission_id: string; unread_count: number }[] };
       mark_commission_owner_read: { Args: { p_commission_id: string; p_seen_through: string }; Returns: string | null };
       set_exhibition_publication: {
@@ -430,6 +452,7 @@ export interface Database {
         Returns: boolean;
       };
       is_owner_session_active: { Args: { p_session_id: string; p_user_id: string }; Returns: boolean };
+      owner_session_expires_at: { Args: { p_session_id: string; p_user_id: string }; Returns: string | null };
       commission_business_metrics: { Args: Record<string, never>; Returns: Json };
       attach_commission_order: {
         Args: { p_commission_id: string; p_order_id: string; p_amount: number; p_currency: string };

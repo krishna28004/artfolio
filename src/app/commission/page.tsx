@@ -9,6 +9,7 @@ export default async function CommissionPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const artworkRef = params.ref ? String(params.ref) : "";
 
+  const acceptingRequests = await isCommissionIntakeEnabled();
   return (
     <main className="flex-1 flex flex-col bg-background text-text min-h-screen">
       <div className="w-full max-w-[800px] mx-auto px-4 sm:px-6 pt-24 pb-28 md:pt-32 md:pb-36 flex flex-col">
@@ -26,7 +27,7 @@ export default async function CommissionPage({ searchParams }: PageProps) {
         </header>
 
         {/* Minimal Premium Commission Form */}
-        <CommissionForm initialReference={artworkRef} acceptingRequests={isCommissionIntakeEnabled()} />
+        <CommissionForm initialReference={artworkRef} acceptingRequests={acceptingRequests} />
       </div>
     </main>
   );

@@ -114,4 +114,24 @@ The security pass is on local branch `codex/supabase-security-rehearsal` at reve
 | Hosted integration and operations | NOT VERIFIED | No live Supabase RLS/Storage/MFA/account recovery, Razorpay test-mode capture/refund, Resend, Upstash, cron, backup/restore or multi-connection checks. A late capture after an owner cancelled an expired order needs a reviewed reconciliation path. |
 | Release decision | **NO-GO** | Real commissions/payments remain closed until hosted rehearsal and provider gates pass with separate authorization. |
 
-See `SUPABASE_SECURITY_REVIEW.md` for severity-ranked findings and RPC caller traces, and `SUPABASE_REHEARSAL_RUNBOOK.md` for the exact 11-file order, manual Dashboard actions, offline checks, safe review commands and recovery guidance. Both are local-only documents. The next action is read-only confirmation of the existing disposable project's exact reference and branch in the Dashboard; it does not authorize SQL.
+See `SUPABASE_SECURITY_REVIEW.md` for severity-ranked findings and RPC caller traces, and `SUPABASE_REHEARSAL_RUNBOOK.md` for the exact 12-file order, manual Dashboard actions, offline checks, safe review commands and recovery guidance. Both are local-only documents. The next action is read-only confirmation of the existing disposable project's exact reference and branch in the Dashboard; it does not authorize SQL.
+
+## Commission workflow continuation — 2026-10-15
+
+The commission UI, guest submission, idempotency, private reference uploads and tracking links, owner quote/action routes, customer quote acceptance, checkout guards, Razorpay verification/webhooks, private deliverable release, revision actions and notification retry paths were reviewed and reused. The public pause was intentional: `ARTFOLIO_COMMISSIONS_ENABLED` is an exact-`true` deployment kill switch and had not been cleared. This task did not enable either commission intake or payments.
+
+| Item | Current result | Evidence / remaining dependency |
+| --- | --- | --- |
+| Artist-side request availability | IMPLEMENTED LOCALLY — NOT DEPLOYED | New `/admin/settings` control writes through an MFA/owner-authorized RPC. A global deployment kill switch remains independent; with it closed, requests cannot be opened. Missing schema/read errors fail closed. Migration 12 seeds availability paused and records changes. |
+| Artist clarification | AVAILABLE THROUGH OWNER REPLY — LOCAL | Commission detail UI labels the existing customer-visible reply control for clarification requests. It preserves status and records a reply event; this flow does not introduce a distinct clarification status/event. Customers can respond using private tracking messages. |
+| Request form and private workflow | VERIFIED BY LOCAL TESTS | Existing flow retained; new tests cover global kill switch, artist pause, and owner authorization for setting changes. No browser/service-backed form submission was attempted. |
+| New migration / rehearsal bundle | PREPARED LOCALLY — NOT SQL-EXECUTED | Added `20261014000000_commission_availability.sql` as migration 12 and updated the bundle inventory/runbook. The preparation function assembles all 12 migrations in memory. The earlier 11-migration bundle and manifest are stale and must be regenerated and audited before any future approved rehearsal. |
+| SQL syntax / RLS / grants execution | BLOCKED LOCALLY | `node supabase/verification/validate-local-postgres.mjs` could not run because `@electric-sql/pglite` is not installed. Dependencies were not installed. The migration has not been compiled or run against PostgreSQL or Supabase. |
+| Local application tests | PASS — LOCAL MOCKS | `npm test`: 288 passed, 0 failed. This is not evidence of hosted database, storage or provider behavior. |
+| TypeScript and lint | PASS — LOCAL | `npx --no-install tsc --noEmit --incremental false` and `npm run lint` both exited 0. |
+| Production build | PASS — LOCAL | `npm run build` completed after permission for existing public Google Fonts and worker processes; build used loopback-only Supabase placeholders and both launch flags false. The only Supabase probe was to loopback and returned unavailable. |
+| Public commission browser state | PASS — LOCAL | `tests/commission-browser.mjs` passed desktop 1440×900 and mobile 390×844 paused-state checks, no horizontal overflow, no form submit control while paused, and zero console/runtime errors. Screenshots were saved under the test's temporary profile directory. |
+| Hosted auth, migrations, RLS, Storage, notifications and payments | NOT VERIFIED | Requires separately approved rehearsal, migration-history reconciliation, storage object tests, owner MFA/recovery checks, and Razorpay test-mode/Resend checks. No remote database/provider was contacted. |
+| Real commissions/payments | **NO-GO** | Intake and payment flags remain disabled; never open real intake until migration 12 and all earlier migration, backup/restore, MFA, Storage, sandbox and operational gates pass. |
+
+No `.env.local` or `.env.test.local` file was edited. No remote database, production resource, payment provider, deployment, commit or push was changed by this continuation.

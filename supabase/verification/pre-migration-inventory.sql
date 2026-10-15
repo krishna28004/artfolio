@@ -13,7 +13,7 @@ END $$;
 SELECT id, public, file_size_limit, allowed_mime_types FROM storage.buckets
  WHERE id IN ('commission-private', 'artworks-public');
 SELECT column_name,data_type FROM information_schema.columns
- WHERE table_schema='auth' AND table_name='sessions' AND column_name IN ('id','user_id','not_after');
+ WHERE table_schema='auth' AND table_name='sessions' AND column_name IN ('id','user_id','not_after','created_at');
 SELECT table_name,column_name,data_type FROM information_schema.columns
  WHERE table_schema='public' AND table_name IN ('artworks','commissions','commission_files',
  'commission_events','notification_jobs','payment_events','commission_refunds','quote_templates','exhibition_settings','artwork_views')

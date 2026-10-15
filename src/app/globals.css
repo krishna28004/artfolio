@@ -103,6 +103,7 @@
 .home-feature-item:hover,
 .home-feature-item:focus-visible,
 .home-feature-item[aria-current="location"] { background: rgb(229 224 216 / 0.08); }
+.home-feature-item:active { background: rgb(229 224 216 / 0.12); }
 .home-feature-item[aria-current="location"] { color: var(--accent); }
 .home-feature-item:hover .home-feature-icon,
 .home-feature-item:focus-visible .home-feature-icon { transform: translateY(-1px); }
@@ -120,22 +121,28 @@
 
 @media (max-width: 767px) {
   .home-feature-dock {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
-    gap: 0;
-    padding: 4px;
+    max-width: 420px;
+    gap: 2px;
+    padding: 5px;
+    border-radius: 21px;
+    background: rgb(22 21 20 / 0.82);
   }
   .home-feature-item {
-    flex: 1 1 0;
     min-width: 0;
-    justify-content: center;
-    gap: 5px;
-    padding: 9px 4px;
+    min-height: 44px;
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 8px 11px;
     transform: none !important;
   }
   .home-feature-label {
-    font-size: 8px;
-    letter-spacing: 0.04em;
+    font-size: 9px;
+    letter-spacing: 0.08em;
   }
+  .home-feature-icon { width: 17px; height: 17px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

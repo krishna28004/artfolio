@@ -1,5 +1,7 @@
 import { HeroCarousel } from "@/components/blocks/HeroCarousel";
 import { Gallery } from "@/components/blocks/Gallery";
+import { Materials } from "@/components/blocks/Materials";
+import { VirtualGalleryPreview } from "@/components/blocks/VirtualGalleryPreview";
 import { About } from "@/components/blocks/About";
 import { getArtworkCatalog } from "@/features/artwork/services/artwork-service";
 
@@ -11,6 +13,8 @@ export default async function Home() {
     <div className="flex-1 flex flex-col">
       <HeroCarousel artworks={catalog.artworks} />
       <Gallery artworks={catalog.artworks} catalogUnavailable={catalog.status === "unavailable"} />
+      <Materials />
+      <VirtualGalleryPreview artworks={catalog.artworks} />
       <About />
     </div>
   );

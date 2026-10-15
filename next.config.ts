@@ -4,7 +4,7 @@ const cspHeader = `
   default-src 'self';
   script-src 'self' 'unsafe-eval' 'unsafe-inline' https://checkout.razorpay.com https://api.razorpay.com;
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-  img-src 'self' blob: data: https://res.cloudinary.com https://images.unsplash.com https://*.supabase.co https://*.razorpay.com;
+  img-src 'self' blob: data: https://res.cloudinary.com https://images.unsplash.com https://img.youtube.com https://i.ytimg.com https://*.supabase.co https://*.razorpay.com;
   font-src 'self' data: https://fonts.gstatic.com;
   connect-src 'self' https://raw.githack.com https://raw.githubusercontent.com https://api.cloudinary.com https://*.supabase.co wss://*.supabase.co https://api.razorpay.com https://lumberjack.razorpay.com https://checkout.razorpay.com;
   frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com;

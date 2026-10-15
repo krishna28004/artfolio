@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { getSupabase } from "@/shared/services/supabase";
 import { artworks as staticArtworks } from "@/features/artwork/data/artworks";
 import type { Artwork } from "@/features/artwork/data/artworks";
@@ -115,7 +116,7 @@ export async function getAllArtworks(): Promise<Artwork[]> {
   return catalog.artworks;
 }
 
-export async function getArtworkById(id: string): Promise<Artwork | null> {
+async function getArtworkByIdUncached(id: string): Promise<Artwork | null> {
   try {
     const schema = await catalogSchema();
     let query = getSupabase().from("artworks").select(catalogColumns(schema)).eq("id", id);
@@ -130,3 +131,6 @@ export async function getArtworkById(id: string): Promise<Artwork | null> {
     fail("detail_configuration_or_network", error);
   }
 }
+
+/** Share the public detail lookup between generateMetadata and the page render. */
+export const getArtworkById = cache(getArtworkByIdUncached);

@@ -11,9 +11,14 @@ const rows = new Map<string, Record<string, unknown>>();
 process.env.SUPABASE_SERVICE_ROLE_KEY = "unit-test-only-service-secret";
 let insertFailure: string | null = null;
 let eventFailure = false;
+let intakeOpen = true;
 const db = {
   async rpc(name: string) { assert.equal(name, "ensure_commission_submission_events"); return eventFailure ? { data: null, error: { code: "TEST" } } : { data: crypto.randomUUID(), error: null }; },
   from(table: string) {
+    if (table === "commission_intake_settings") {
+      const q = { select() { return q; }, eq() { return q; }, maybeSingle: async () => ({ data: { accepting_requests: intakeOpen }, error: null }) };
+      return q;
+    }
     if (table === "commission_events") return { insert() { return { select() { return { single: async () => ({ data: { id: crypto.randomUUID() }, error: null }) }; } }; } };
     if (table === "notification_jobs") return { upsert: async () => ({ error: null }) };
     assert.equal(table, "commissions");
@@ -56,6 +61,7 @@ afterEach(() => {
   rows.clear();
   insertFailure = null;
   eventFailure = false;
+  intakeOpen = true;
 });
 
 test("submission returns a persistent reference and identical retry returns the same one", async () => {
@@ -68,6 +74,29 @@ test("submission returns a persistent reference and identical retry returns the 
   assert.equal(retry.status, 200);
   assert.equal((await retry.json()).id, firstBody.id);
   assert.equal(rows.size, 1);
+});
+
+test("the deployment kill switch pauses intake before reading the database", async () => {
+  const previous = process.env.ARTFOLIO_COMMISSIONS_ENABLED;
+  delete process.env.ARTFOLIO_COMMISSIONS_ENABLED;
+  let reads = 0;
+  _setAdminInstanceForTesting({ from() { reads++; throw new Error("closed-gate-must-not-query"); } } as any);
+  try {
+    const response = await submit(payload("closed-intake-key"));
+    assert.equal(response.status, 503);
+    assert.equal(reads, 0);
+  } finally {
+    if (previous === undefined) delete process.env.ARTFOLIO_COMMISSIONS_ENABLED;
+    else process.env.ARTFOLIO_COMMISSIONS_ENABLED = previous;
+  }
+});
+
+test("the persisted owner setting can pause intake while the deployment gate is enabled", async () => {
+  _setAdminInstanceForTesting(db as any);
+  intakeOpen = false;
+  const response = await submit(payload("owner-paused-intake-key"));
+  assert.equal(response.status, 503);
+  assert.equal(rows.size, 0);
 });
 
 test("same idempotency key with changed details is a conflict", async () => {

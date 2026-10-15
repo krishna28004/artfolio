@@ -16,6 +16,8 @@ export const expectedMigrations=[
  "20261011040000_artist_workspace.sql",
  "20261013000000_owner_session_revocation.sql",
  "20261013010000_rehearsal_security_hardening.sql",
+ "20261014000000_commission_availability.sql",
+ "20261015000000_owner_portal_login_controls.sql",
 ];
 export function buildRehearsalSql(){
  const directory=resolve(root,"supabase/migrations");
@@ -29,7 +31,7 @@ export function buildRehearsalSql(){
   "BEGIN",
   " IF EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind IN ('r','p')) THEN RAISE EXCEPTION 'fresh_empty_public_schema_required'; END IF;",
   " IF to_regclass('storage.buckets') IS NULL OR to_regclass('storage.objects') IS NULL OR to_regclass('auth.sessions') IS NULL THEN RAISE EXCEPTION 'supabase_system_schema_required'; END IF;",
-  " IF (SELECT count(*) FROM information_schema.columns WHERE table_schema='auth' AND table_name='sessions' AND column_name IN ('id','user_id','not_after'))<>3 THEN RAISE EXCEPTION 'auth_session_columns_required'; END IF;",
+  " IF (SELECT count(*) FROM information_schema.columns WHERE table_schema='auth' AND table_name='sessions' AND column_name IN ('id','user_id','not_after','created_at'))<>4 THEN RAISE EXCEPTION 'auth_session_columns_required'; END IF;",
   " IF NOT has_table_privilege(current_user,'auth.sessions','SELECT') THEN RAISE EXCEPTION 'migration_owner_requires_auth_session_read'; END IF;",
   " IF (SELECT count(*) FROM pg_roles WHERE rolname IN ('anon','authenticated','service_role'))<>3 THEN RAISE EXCEPTION 'supabase_roles_required'; END IF;",
   "END $preflight$;",
