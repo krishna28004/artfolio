@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   if (!code) {
     destination.searchParams.set("error", "invalid");
-    return NextResponse.redirect(destination, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.redirect(destination, { headers: { "Cache-Control": "no-store, private", "Referrer-Policy": "no-referrer" } });
   }
 
   const supabase = await createClient();
@@ -18,10 +18,12 @@ export async function GET(request: NextRequest) {
     if (userError || !owner || !user?.email_confirmed_at || user.email?.trim().toLowerCase() !== owner) {
       await supabase.auth.signOut({ scope: "local" });
       destination.searchParams.set("error", "unauthorized");
+    } else {
+      destination.searchParams.set("recovery", "1");
     }
   } catch {
     await supabase.auth.signOut({ scope: "local" });
     destination.searchParams.set("error", "invalid");
   }
-  return NextResponse.redirect(destination, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.redirect(destination, { headers: { "Cache-Control": "no-store, private", "Referrer-Policy": "no-referrer" } });
 }

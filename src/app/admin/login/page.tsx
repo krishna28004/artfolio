@@ -133,7 +133,7 @@ export default function AdminLoginPage() {
       });
       if (recoveryError) throw recoveryError;
       setNoticeKind("success");
-      setNotice("Recovery request accepted. If this curator email is registered, Supabase will send a password reset link. Check your inbox and spam folder; delivery is not confirmed by this message.");
+      setNotice("Recovery request accepted. If this curator email is registered, Supabase will email a one-time code. Open the Studio password reset page and enter the newest code; do not click a reset link. Check your inbox and spam folder.");
     } catch (cause) {
       setError(getRecoveryErrorMessage(cause, window.location.origin));
     } finally {
