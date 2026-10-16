@@ -18,6 +18,8 @@ export const expectedMigrations=[
  "20261013010000_rehearsal_security_hardening.sql",
  "20261014000000_commission_availability.sql",
  "20261015000000_owner_portal_login_controls.sql",
+ "20261016000000_preserve_exhibition_coordinates.sql",
+ "20261016010000_secure_legacy_public_tables.sql",
 ];
 export function buildRehearsalSql(){
  const directory=resolve(root,"supabase/migrations");

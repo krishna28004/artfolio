@@ -1,6 +1,8 @@
 # Commission workflow release checklist
 
-This is a local implementation checklist, not evidence of a live deployment. The changes in `supabase/migrations/20261011000000_commission_reference_public_id.sql` and `20261011010000_private_commission_workflow.sql` have **not** been applied to an external database in this task. Keep public commission submission disabled until the isolated-service checks below pass.
+**Current status — 16 October 2026:** The reviewed migration sequence was applied to `artfolio-rehearsal`, and the approved 11 pending migrations were applied to the confirmed production project through the Supabase SQL Editor. The SQL Editor did not update CLI migration history; production still records its original four versions. The available production export is partial and has no tested restore path. Application deployment and end-to-end hosted Auth, Storage, email, payment, monitoring, and recovery checks are not established by migration success. Keep commission intake and payments disabled until the remaining release gates below have current evidence and the owner explicitly opens them.
+
+The dated checkpoints below preserve evidence from earlier stages. Their “current” tables describe the state on their stated dates and are not current status summaries.
 
 ## Implemented paths
 
@@ -114,7 +116,7 @@ The security pass is on local branch `codex/supabase-security-rehearsal` at reve
 | Hosted integration and operations | NOT VERIFIED | No live Supabase RLS/Storage/MFA/account recovery, Razorpay test-mode capture/refund, Resend, Upstash, cron, backup/restore or multi-connection checks. A late capture after an owner cancelled an expired order needs a reviewed reconciliation path. |
 | Release decision | **NO-GO** | Real commissions/payments remain closed until hosted rehearsal and provider gates pass with separate authorization. |
 
-See `SUPABASE_SECURITY_REVIEW.md` for severity-ranked findings and RPC caller traces, and `SUPABASE_REHEARSAL_RUNBOOK.md` for the exact 12-file order, manual Dashboard actions, offline checks, safe review commands and recovery guidance. Both are local-only documents. The next action is read-only confirmation of the existing disposable project's exact reference and branch in the Dashboard; it does not authorize SQL.
+See [the Supabase security review](../supabase/SECURITY_REVIEW.md) for findings and RPC caller traces, and [the rehearsal runbook](../supabase/REHEARSAL_RUNBOOK.md) for the current 15-file inventory, hosted execution record, safe review commands, and recovery limitations. SQL Editor history still needs reconciliation before any future CLI deployment. Do not enable commissions or payments based on local tests alone.
 
 ## Commission workflow continuation — 2026-10-15
 
