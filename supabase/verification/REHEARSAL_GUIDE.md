@@ -1,6 +1,6 @@
 # Supabase rehearsal and migration reconciliation
 
-This guide prepares a reviewed checkpoint. No hosted migration has been run in this recovery session. Local SQL checks use synthetic Auth and Storage tables and do not establish hosted safety. Keep ARTFOLIO_COMMISSIONS_ENABLED and ARTFOLIO_PAYMENTS_ENABLED false.
+**Historical execution guide — updated 16 October 2026.** The rehearsal project's 15 migrations and the approved production project's 11 pending migrations have already been applied. This file preserves the older migration inventory and verification approach; its ten-row list is incomplete and must not be used as an execution plan. See [`docs/supabase/REHEARSAL_RUNBOOK.md`](../../docs/supabase/REHEARSAL_RUNBOOK.md) for the current 15-file source inventory and actual execution notes. Local SQL checks use synthetic Auth and Storage tables and do not establish hosted safety. Production CLI migration history remains unreconciled; keep `ARTFOLIO_COMMISSIONS_ENABLED` and `ARTFOLIO_PAYMENTS_ENABLED` false.
 
 ## Current manual checkpoint — read only
 
@@ -21,6 +21,8 @@ Record counts and structural findings privately. Empty anonymous results alone d
 The owner-session RPC requires auth.sessions.id, user_id and not_after. Real sign-out, MFA and session invalidation require actual Supabase Auth tests; the local table fixture cannot validate them.
 
 ## Ordered migration inventory
+
+The table below is a historical subset of the sequence and is not a complete migration order. Use the current runbook before planning any future change.
 
 | Order | File | Main dependency / non-replay risk |
 | --- | --- | --- |
@@ -56,7 +58,7 @@ Requires an available @electric-sql/pglite module, optionally identified with PG
 
 telemetry-access-remediation.sql is a narrow prepared security patch, not a command to run immediately. First inspect raw telemetry grants/policies and both anonymous/authenticated access, without retrieving hashes or timestamps into output. If already protected, verify and record the result instead of reapplying. If exposure remains, review the grant snapshot, rehearse the patch and request explicit production approval. Revoking table access alone is insufficient when column grants remain.
 
-## Production rollout and recovery — not authorized
+## Future production rollout and recovery — new changes need separate review
 
 A successful local test or environment preflight is not release approval. Before any production SQL, require hosted rehearsal evidence, a verified backup/restore plan, a reviewed schema/history diff and explicit owner approval. Apply reviewed missing/forward patches only. Verify the public catalog, privacy and server RPCs before Preview integration tests and controlled deployment.
 

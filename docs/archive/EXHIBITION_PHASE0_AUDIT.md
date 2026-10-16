@@ -197,7 +197,7 @@ Once Phase 0 is approved by the user, Phase 1 will execute the following steps:
 
 | Deliverable | File Path | Status |
 |---|---|---|
-| **Deliverable A — Audit Report** | `EXHIBITION_PHASE0_AUDIT.md` | **COMPLETED** |
+| **Deliverable A — Audit Report** | `docs/archive/EXHIBITION_PHASE0_AUDIT.md` | **COMPLETED** |
 | **Deliverable B — Museum Config** | `src/components/exhibition/config/museum.config.ts` | **COMPLETED** |
 | **Deliverable C — Floor Plan** | Embedded in Section 5 of this audit | **COMPLETED** |
 | **Deliverable D — Architecture Decisions** | Embedded in Section 7 of this audit | **COMPLETED** |

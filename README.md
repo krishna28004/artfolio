@@ -1,70 +1,102 @@
-# 🎨 Artfolio 
+# Artfolio
 
-## 📖 Project Overview
-A single-artist portfolio built with Next.js 16 and Three.js, with a virtual 3D exhibition and private commission requests.
+Artfolio is a single-artist portfolio for presenting Krishna Kumar's artwork through a public gallery, artwork detail pages, and an interactive virtual exhibition.
 
-## ✨ Features
+## What is in the project
 
-### 🏛️ Virtual Exhibition
-Explore artwork in a fully rendered Three.js/React Three Fiber gallery.
-* **Adaptive Rendering**: React Three Fiber adjusts rendering resolution to the device. Frame rate depends on the visitor's GPU and browser.
-* **First-Person Controls**: Navigate the space as if you were walking in a physical gallery.
-* **Accessible Alternative**: A motion-free 2D exhibition is available at `/exhibition/accessible`.
+- Public artwork catalog with dedicated artwork pages, saved works, and an accessible 2D exhibition alongside the 3D gallery.
+- Private commission request, tracking, and curator workflows. Supabase Auth protects the Studio Portal and its administrative routes.
+- Optional Razorpay checkout, Resend email, Cloudinary media, and Upstash rate limiting integrations.
+- Commission intake and payments are release-gated and default to disabled. Keep both `ARTFOLIO_COMMISSIONS_ENABLED` and `ARTFOLIO_PAYMENTS_ENABLED` set to `false` until the release checklist is satisfied.
 
-### 💳 Commission System & Secure Checkout
-Commission intake and Razorpay payments are release-gated and currently disabled. Existing customers can still use their private tracking links.
-* **Idempotency**: Prevents duplicate transactions and secures request integrity.
-* **Automated Notifications**: Leverages Resend for real-time email updates between artists and collectors.
+The repository contains working application code and local verification, but those checks do not establish that external Supabase, email, storage, or payment settings are ready. See the current [commission release checklist](docs/commissions/RELEASE_CHECKLIST.md) and [Supabase operations notes](docs/supabase/REHEARSAL_RUNBOOK.md) before changing hosted systems.
 
----
+## Technology
 
-## 🛠 Technology Stack
-* **Frontend:** Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS
-* **3D Rendering:** Three.js, React Three Fiber, Drei
-* **Backend & DB:** Supabase, Upstash Redis
-* **Integrations:** Cloudinary (CDN), Resend (Emails), Razorpay (Payments)
+- Next.js 16 App Router, React 19, TypeScript, and Tailwind CSS
+- Three.js, React Three Fiber, and Drei for the virtual exhibition
+- Supabase Auth, Postgres, and Storage
+- Razorpay, Resend, Cloudinary, and Upstash Redis integrations
+- Node's built-in test runner and ESLint
 
-## 🏗 Architecture Overview
-The application follows a modern serverless architecture. The Next.js App Router handles server-side rendering and API routes. The database and authentication are managed securely via Supabase. State management and 3D rendering are isolated in the client components using React Three Fiber. Payment webhooks utilize cryptographic signatures to ensure transaction authenticity.
+## Application map
 
----
+| Route | Purpose |
+| --- | --- |
+| `/` | Portfolio homepage |
+| `/artworks` | Complete artwork gallery |
+| `/artwork/[id]` | Artwork details |
+| `/saved` | Saved artwork collection |
+| `/exhibition` | Interactive 3D exhibition |
+| `/exhibition/accessible` | Accessible 2D exhibition |
+| `/commission` | Commission request form |
+| `/commission/track/[id]` | Private commission tracking |
+| `/admin/login` | Curator sign-in |
+| `/admin` | Studio dashboard and admin sections |
 
-## 🚀 Getting Started
+The main code is under `src/app`, reusable components under `src/components`, artwork and commission features under `src/features`, database migrations under `supabase/migrations`, and automated checks under `tests`.
 
-### Installation
-Clone the repository and install dependencies:
-```bash
+## Local development
+
+Use a Node.js release supported by Next.js 16 and npm. Install dependencies from the lockfile, then start the development server:
+
+```sh
 git clone https://github.com/krishna28004/artfolio.git
 cd artfolio
 npm ci
 ```
 
-### Environment Variables
-Copy the `.env.example` file to create your local `.env.local` file:
-```bash
-cp .env.example .env.local
-```
-Fill in only the settings needed for the workflow you are testing. Keep `ARTFOLIO_COMMISSIONS_ENABLED=false` and `ARTFOLIO_PAYMENTS_ENABLED=false` until the release gates in `COMMISSION_RELEASE_CHECKLIST.md` pass. Do not commit local environment files.
+Create `.env.local` from the safe variable-name template and fill only credentials for services you intend to test:
 
-### Local Development
-Start the development server:
-```bash
+```sh
+cp .env.example .env.local
 npm run dev
 ```
-Navigate to `http://localhost:3000` to view the application.
 
----
+PowerShell equivalent for the copy step:
 
-## 🌐 Deployment
-The project can be deployed on Vercel after the release checklist is complete. Configure secrets in the deployment provider rather than copying `.env.local`. Rehearse database changes using `SUPABASE_REHEARSAL_RUNBOOK.md` and `SUPABASE_RECOVERY_WORKFLOW.md`; neither document authorizes production migration execution.
+```powershell
+Copy-Item .env.example .env.local
+npm run dev
+```
 
-## 🗺 Future Roadmap
-* AR integration for native mobile browsers.
-* Dynamic exhibition lighting based on real-world time of day.
-* Expanded payment gateways (Stripe integration).
+Open `http://localhost:3000`. Never commit `.env.local`; keep Supabase service-role, admin, payment, email, storage, and cron credentials server-side. `NEXT_PUBLIC_*` variables are exposed to browser code. Local pages and mocked tests may work without every optional provider configured; provider-backed flows need their own test credentials.
 
-## 👨‍💻 Author
-**krishna28004**
+`.env.example` contains placeholders only. Set both release flags to `false` for local setup. Do not put production values in local test configuration.
 
-## 📄 License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## Checks
+
+Run the repository's available checks from the project root:
+
+```sh
+npm run lint
+npm test
+npx tsc --noEmit --incremental false
+npm run build
+```
+
+The test command uses Node's test runner and local fixtures/mocks. A passing local suite does not verify hosted authorization policies, email delivery, storage access, payment callbacks, or database recovery. The production build may require valid local environment configuration; use loopback-only fixtures for build verification and keep commission/payment flags off.
+
+## Supabase and release safety
+
+SQL migrations live in `supabase/migrations` and are numbered in application order. The current rehearsal and production projects have already received their reviewed migration sets through the Supabase SQL Editor. That method did not record the corresponding CLI migration versions, so do not replay the bundle or run `db push`/`db reset` against either existing project. Reconcile the execution ledger and actual schema before any later database deployment. Read [the rehearsal runbook](docs/supabase/REHEARSAL_RUNBOOK.md), [the recovery workflow](docs/supabase/RECOVERY_WORKFLOW.md), and [the security review](docs/supabase/SECURITY_REVIEW.md) first.
+
+The production snapshot described in those notes is partial and has no tested restore path. The commission and payment release flags remain disabled. This repository does not itself change hosting variables, deploy the app, or enable payments.
+
+## Deployment
+
+The app uses standard Next.js build and start commands. Hosting configuration and deployed environment variables are managed outside this repository. Before deploying, review the commission release checklist, configure secrets in the hosting provider, confirm the intended Git branch and Supabase project, and validate the matching Preview environment. Do not use a production service-role key in a client-side variable.
+
+## Documentation
+
+- [Commission release checklist](docs/commissions/RELEASE_CHECKLIST.md)
+- [Supabase rehearsal runbook](docs/supabase/REHEARSAL_RUNBOOK.md)
+- [Supabase recovery workflow](docs/supabase/RECOVERY_WORKFLOW.md)
+- [Supabase security review](docs/supabase/SECURITY_REVIEW.md)
+- [Migration readiness checklist](supabase/verification/PRE_MIGRATION_READINESS_CHECKLIST.md)
+- [Rehearsal guide](supabase/verification/REHEARSAL_GUIDE.md)
+- [Historical audits and checkpoints](docs/archive/README.md)
+
+## License
+
+Artfolio is released under the [MIT License](LICENSE).
