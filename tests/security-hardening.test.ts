@@ -16,6 +16,7 @@ import { POST as validateCheckout } from "../src/app/api/checkout/validate/route
 import { POST as verifyPayment } from "../src/app/api/payment/verify/route.ts";
 import { POST as paymentWebhook } from "../src/app/api/payment/webhook/route.ts";
 import { POST as uploadMedia } from "../src/app/api/media/upload/route.ts";
+import { _setCommissionCustomerForTesting } from "../src/features/commission/server/customer-auth.ts";
 import { GET as getAdminCommissions } from "../src/app/api/admin/commissions/route.ts";
 import { POST as approveAdminCommission } from "../src/app/api/admin/approve/route.ts";
 import { POST as rejectAdminCommission } from "../src/app/api/admin/reject/route.ts";
@@ -903,6 +904,16 @@ describe("ARTfolio Phase 2 Security Hardening & Regression Tests", () => {
   // 5. CLOUDINARY UPLOAD SECURITY & CLIENT BUNDLE SECRECY
   // ============================================================================
   describe("Cloudinary Upload Security & Architecture", () => {
+    beforeEach(() => _setCommissionCustomerForTesting({ email: "patron@example.com" }));
+    afterEach(() => _setCommissionCustomerForTesting(undefined));
+
+    test("private reference upload requires a verified customer session", async () => {
+      _setCommissionCustomerForTesting(null);
+      const req = new NextRequest("http://localhost:3000/api/media/upload", { method: "POST", body: new FormData() });
+      const res = await uploadMedia(req);
+      assert.strictEqual(res.status, 401);
+    });
+
     test("server upload endpoint rejects oversized files (> 10MB)", async () => {
       const oversizedBuffer = Buffer.alloc(11 * 1024 * 1024);
       const formData = new FormData();

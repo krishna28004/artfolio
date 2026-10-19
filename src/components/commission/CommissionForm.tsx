@@ -14,6 +14,7 @@ import { uploadPrivateReference, type PrivateReferenceClaim } from "@/shared/ser
 interface CommissionFormProps {
   initialReference?: string;
   acceptingRequests?: boolean;
+  customerEmail?: string;
 }
 
 const SCALE_OPTIONS = [
@@ -30,7 +31,7 @@ const BUDGET_OPTIONS = [
   { id: "undisclosed", label: "Undisclosed", subtitle: "Custom Scope" },
 ];
 
-export function CommissionForm({ initialReference = "", acceptingRequests = false }: CommissionFormProps) {
+export function CommissionForm({ initialReference = "", acceptingRequests = false, customerEmail = "" }: CommissionFormProps) {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submittedId, setSubmittedId] = useState("");
   const [uploadState, setUploadState] = useState<"idle" | "uploading" | "done" | "error">("idle");
@@ -60,7 +61,7 @@ export function CommissionForm({ initialReference = "", acceptingRequests = fals
     defaultValues: {
       idempotencyKey: "",
       name: "",
-      email: "",
+      email: customerEmail,
       fileClaims: [],
       size: "Medium (24\" – 48\")",
       budget: "₹5,000 – ₹10,000",
@@ -260,10 +261,12 @@ export function CommissionForm({ initialReference = "", acceptingRequests = fals
           <input
             id="patron-email"
             type="email"
-            placeholder="name@domain.com"
+            readOnly
+            aria-readonly="true"
             {...register("email")}
-            className="w-full bg-transparent border-b border-white/15 py-3 px-0 text-text placeholder:text-muted/30 focus:outline-none focus:border-primary transition-colors text-[15px] font-sans"
+            className="w-full bg-transparent border-b border-white/15 py-3 px-0 text-text focus:outline-none focus:border-primary transition-colors text-[15px] font-sans"
           />
+          <span className="text-[11px] text-muted/60 mt-1">Verified by the code sent to this address.</span>
           {errors.email && (
             <span className="text-red-400/90 text-[12px] mt-1.5 font-sans">{errors.email.message}</span>
           )}

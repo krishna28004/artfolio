@@ -50,6 +50,8 @@ export default function AdminCommissionDetailPage({
 
   const [commission, setCommission] = useState<CommissionDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [reloadCount, setReloadCount] = useState(0);
   const [quoteRupees, setQuoteRupees] = useState<string>("");
   const [adminNotes, setAdminNotes] = useState<string>("");
   const [actionLoading, setActionLoading] = useState(false);
@@ -63,33 +65,36 @@ export default function AdminCommissionDetailPage({
   const [deliverable, setDeliverable] = useState<File | null>(null);
 
   useEffect(() => {
+    let active = true;
     async function loadCommission() {
+      setLoading(true);
+      setLoadError("");
       try {
-        const res = await fetch(`/api/admin/commissions/${commissionId}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && data.data) {
-            setCommission(data.data);
-            if (data.data.price) {
-              setQuoteRupees(String(Math.round(data.data.price / 100)));
-            }
-            if (data.data.admin_notes) {
-              setAdminNotes(data.data.admin_notes);
-            }
-            setQuoteScope(data.data.quote_scope || "");
-            setQuoteTerms(data.data.quote_terms || "");
-            setRevisions(String(data.data.revision_allowance ?? 1));
-          }
+        const res = await fetch(`/api/admin/commissions/${commissionId}`, { cache: "no-store" });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.success || !data.data) {
+          throw new Error(data?.message || (res.status === 401
+            ? "Your studio session is no longer authorized. Sign in again and complete authenticator verification."
+            : res.status === 404 ? "This commission request was not found."
+              : "Commission details could not be loaded. Please try again."));
         }
+        if (!active) return;
+        setCommission(data.data);
+        if (data.data.price) setQuoteRupees(String(Math.round(data.data.price / 100)));
+        if (data.data.admin_notes) setAdminNotes(data.data.admin_notes);
+        setQuoteScope(data.data.quote_scope || "");
+        setQuoteTerms(data.data.quote_terms || "");
+        setRevisions(String(data.data.revision_allowance ?? 1));
       } catch (err) {
-        console.warn("[ADMIN_COMMISSION_DETAIL_LOAD_ERROR]", err);
+        if (active) setLoadError(err instanceof Error ? err.message : "Commission details could not be loaded. Please try again.");
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     }
 
-    loadCommission();
-  }, [commissionId]);
+    void loadCommission();
+    return () => { active = false; };
+  }, [commissionId, reloadCount]);
 
   const handleApprove = async () => {
     if (!window.confirm("Send this quote and terms to the customer for acceptance?")) return;
@@ -221,10 +226,14 @@ export default function AdminCommissionDetailPage({
     );
   }
 
-  if (!commission) {
+  if (loadError || !commission) {
     return (
-      <div className="py-32 text-center space-y-4">
-        <p className="font-serif text-2xl text-text">Commission Not Found</p>
+      <div className="py-32 text-center space-y-4" role={loadError ? "alert" : undefined}>
+        <p className="font-serif text-2xl text-text">{loadError || "Commission Not Found"}</p>
+        {loadError && <button type="button" onClick={() => setReloadCount((count) => count + 1)}
+          className="border border-outline-variant/30 px-4 py-2 text-[10px] uppercase tracking-widest text-text hover:border-primary hover:text-primary">
+          Retry loading request
+        </button>}
         <Link href="/admin/commissions" className="text-xs uppercase tracking-widest text-primary">
           &larr; Return to Commissions Queue
         </Link>

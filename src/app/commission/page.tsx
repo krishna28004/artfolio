@@ -1,5 +1,8 @@
 import { isCommissionIntakeEnabled } from "@/shared/utils/release-controls";
 import { CommissionForm } from "@/components/commission/CommissionForm";
+import { CommissionAuth } from "@/components/commission/CommissionAuth";
+import { CommissionAccount } from "@/components/commission/CommissionAccount";
+import { getVerifiedCommissionCustomer } from "@/features/commission/server/customer-auth";
 
 interface PageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -7,8 +10,10 @@ interface PageProps {
 
 export default async function CommissionPage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const artworkRef = params.ref ? String(params.ref) : "";
+  const artworkRef = typeof params.ref === "string" ? params.ref.slice(0, 120) : "";
 
+  const customer = await getVerifiedCommissionCustomer();
+  const customerEmail = customer?.email || "";
   const acceptingRequests = await isCommissionIntakeEnabled();
   return (
     <main className="flex-1 flex flex-col bg-background text-text min-h-screen">
@@ -26,8 +31,10 @@ export default async function CommissionPage({ searchParams }: PageProps) {
           </p>
         </header>
 
-        {/* Minimal Premium Commission Form */}
-        <CommissionForm initialReference={artworkRef} acceptingRequests={acceptingRequests} />
+        {customerEmail ? <>
+          <CommissionAccount email={customerEmail} />
+          <CommissionForm initialReference={artworkRef} acceptingRequests={acceptingRequests} customerEmail={customerEmail} />
+        </> : <CommissionAuth acceptingRequests={acceptingRequests} />}
       </div>
     </main>
   );

@@ -1,17 +1,19 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { test, afterEach } from "node:test";
+import { test, afterEach, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { POST } from "../src/app/api/commission/route.ts";
 import { POST as signUpload } from "../src/app/api/media/sign-upload/route.ts";
 import { _setAdminInstanceForTesting } from "../src/shared/services/supabase-admin.ts";
 import { escapeHtml } from "../src/shared/utils/html.ts";
+import { _setCommissionCustomerForTesting } from "../src/features/commission/server/customer-auth.ts";
 
 const rows = new Map<string, Record<string, unknown>>();
 process.env.SUPABASE_SERVICE_ROLE_KEY = "unit-test-only-service-secret";
 let insertFailure: string | null = null;
 let eventFailure = false;
 let intakeOpen = true;
+beforeEach(() => _setCommissionCustomerForTesting({ email: "patron@example.com" }));
 const db = {
   async rpc(name: string) { assert.equal(name, "ensure_commission_submission_events"); return eventFailure ? { data: null, error: { code: "TEST" } } : { data: crypto.randomUUID(), error: null }; },
   from(table: string) {
@@ -58,10 +60,36 @@ function payload(key: string) {
 
 afterEach(() => {
   _setAdminInstanceForTesting(null);
+  _setCommissionCustomerForTesting(undefined);
   rows.clear();
   insertFailure = null;
   eventFailure = false;
   intakeOpen = true;
+});
+
+test("only a visitor with a verified email can submit a request", async () => {
+  _setAdminInstanceForTesting(db as any);
+  _setCommissionCustomerForTesting(null);
+  const response = await submit(payload("anonymous-key"));
+  assert.equal(response.status, 401);
+  assert.equal(rows.size, 0);
+});
+
+test("a verified visitor cannot submit using another email address", async () => {
+  _setAdminInstanceForTesting(db as any);
+  const response = await submit({ ...payload("other-email-key"), email: "another@example.com" });
+  assert.equal(response.status, 403);
+  assert.equal(rows.size, 0);
+});
+
+test("cross-origin submissions are rejected before a privileged insert", async () => {
+  _setAdminInstanceForTesting(db as any);
+  const response = await POST(new Request("http://localhost/api/commission", {
+    method: "POST", headers: { "content-type": "application/json", origin: "https://other.example" },
+    body: JSON.stringify(payload("cross-origin-key")),
+  }));
+  assert.equal(response.status, 403);
+  assert.equal(rows.size, 0);
 });
 
 test("submission returns a persistent reference and identical retry returns the same one", async () => {

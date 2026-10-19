@@ -7,6 +7,7 @@ import { supabaseAdmin } from "@/shared/services/supabase-admin";
 import { checkDistributedRateLimit, getClientIp } from "@/shared/utils/rate-limit";
 import { makeTrackingToken } from "@/features/commission/server/tracking-token";
 import { deliverPendingNotifications } from "@/features/commission/server/notifications";
+import { getVerifiedCommissionCustomer } from "@/features/commission/server/customer-auth";
 
 function sha256(value: string): string {
   return crypto.createHash("sha256").update(value).digest("hex");
@@ -34,6 +35,14 @@ export async function POST(req: Request) {
   if (!(await isCommissionIntakeEnabled())) return NextResponse.json({ success: false, message: "New commissions are temporarily paused. Please check back later." }, {
     status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "3600" },
   });
+  const customer = await getVerifiedCommissionCustomer();
+  if (!customer) return NextResponse.json({ success: false, message: "Verify your email before requesting a commission." }, {
+    status: 401, headers: { "Cache-Control": "no-store" },
+  });
+  const origin = req.headers.get("origin");
+  if (origin && origin !== new URL(req.url).origin) {
+    return NextResponse.json({ success: false, message: "Invalid request origin." }, { status: 403 });
+  }
   try {
     const limit = await checkDistributedRateLimit(`commission_${getClientIp(req)}`, 5, 15 * 60 * 1000);
     if (!limit.success) {
@@ -44,6 +53,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, message: "Invalid request details.", errors: parsed.error.flatten().fieldErrors }, { status: 400 });
     }
     const data = parsed.data;
+    if (data.email.trim().toLowerCase() !== customer.email) {
+      return NextResponse.json({ success: false, message: "The contact email must match your verified address." }, { status: 403 });
+    }
     const claimIds = data.fileClaims.map((claim) => claim.id);
     if (new Set(claimIds).size !== claimIds.length) {
       return NextResponse.json({ success: false, message: "Duplicate reference file." }, { status: 400 });
@@ -53,7 +65,7 @@ export async function POST(req: Request) {
     const token = makeTrackingToken(data.idempotencyKey);
     const tokenHash = sha256(token);
     const { error } = await supabaseAdmin.from("commissions").insert({
-      id, idempotency_key: data.idempotencyKey, name: data.name, email: data.email,
+      id, idempotency_key: data.idempotencyKey, name: data.name, email: customer.email,
       image_url: null, public_id: null, size: data.size, budget: data.budget,
       deadline: data.deadline || null, message: data.message, status: "pending",
       request_reference: reference, tracking_token_hash: tokenHash, reference_claim_ids: claimIds,
@@ -67,7 +79,7 @@ export async function POST(req: Request) {
       const { data: previous } = await supabaseAdmin.from("commissions")
         .select("id, name, email, size, budget, deadline, message, request_reference, tracking_token_hash, reference_claim_ids")
         .eq("idempotency_key", data.idempotencyKey).maybeSingle();
-      if (!previous || previous.name !== data.name || previous.email !== data.email ||
+      if (!previous || previous.name !== data.name || previous.email !== customer.email ||
           previous.size !== data.size || previous.budget !== data.budget ||
           previous.deadline !== (data.deadline || null) || previous.message !== data.message ||
           JSON.stringify(previous.reference_claim_ids || []) !== JSON.stringify(claimIds)) {

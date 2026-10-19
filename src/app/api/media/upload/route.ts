@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 import { getSupabaseAdmin } from "@/shared/services/supabase-admin";
 import { checkDistributedRateLimit, getClientIp } from "@/shared/utils/rate-limit";
 import { validReferenceContent } from "@/features/commission/server/file-content";
+import { getVerifiedCommissionCustomer } from "@/features/commission/server/customer-auth";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const CONTENT_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
@@ -13,6 +14,13 @@ export async function POST(req: NextRequest) {
   if (!(await isCommissionIntakeEnabled())) return NextResponse.json({ success: false, message: "New commissions are temporarily paused. Please check back later." }, {
     status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "3600" },
   });
+  if (!(await getVerifiedCommissionCustomer())) return NextResponse.json({ success: false, message: "Verify your email before uploading references." }, {
+    status: 401, headers: { "Cache-Control": "no-store" },
+  });
+  const origin = req.headers.get("origin");
+  if (origin && origin !== req.nextUrl.origin) {
+    return NextResponse.json({ success: false, message: "Invalid request origin." }, { status: 403 });
+  }
   try {
     const limit = await checkDistributedRateLimit(`commission_upload_${getClientIp(req)}`, 10, 60 * 60 * 1000);
     if (!limit.success) {

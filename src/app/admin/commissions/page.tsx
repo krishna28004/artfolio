@@ -20,28 +20,34 @@ export default function AdminCommissionsQueuePage() {
   const [commissions, setCommissions] = useState<CommissionItem[]>([]);
   const [filter, setFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [reloadCount, setReloadCount] = useState(0);
 
   useEffect(() => {
+    let active = true;
     async function fetchCommissions() {
       setLoading(true);
+      setLoadError("");
       try {
         const url = filter === "all" ? "/api/admin/commissions" : `/api/admin/commissions?status=${filter}`;
-        const res = await fetch(url);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && Array.isArray(data.data)) {
-            setCommissions(data.data);
-          }
+        const res = await fetch(url, { cache: "no-store" });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.success || !Array.isArray(data.data)) {
+          throw new Error(data?.message || (res.status === 401
+            ? "Your studio session is no longer authorized. Sign in again and complete authenticator verification."
+            : "The commission queue could not be loaded. Please try again."));
         }
+        if (active) setCommissions(data.data);
       } catch (err) {
-        console.warn("[ADMIN_QUEUE_FETCH_ERROR]", err);
+        if (active) setLoadError(err instanceof Error ? err.message : "The commission queue could not be loaded. Please try again.");
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     }
 
-    fetchCommissions();
-  }, [filter]);
+    void fetchCommissions();
+    return () => { active = false; };
+  }, [filter, reloadCount]);
 
   const filterTabs = [
     { id: "all", label: "All Inquiries" },
@@ -108,6 +114,14 @@ export default function AdminCommissionsQueuePage() {
         {loading ? (
           <div className="py-20 text-center text-muted font-sans text-xs tracking-widest uppercase">
             Loading Queue...
+          </div>
+        ) : loadError ? (
+          <div className="py-16 text-center space-y-4" role="alert">
+            <p className="text-sm text-red-300">{loadError}</p>
+            <button type="button" onClick={() => setReloadCount((count) => count + 1)}
+              className="border border-outline-variant/30 px-4 py-2 text-[10px] uppercase tracking-widest text-text hover:border-primary hover:text-primary">
+              Retry loading queue
+            </button>
           </div>
         ) : commissions.length === 0 ? (
           <div className="py-20 text-center text-muted font-sans text-xs tracking-widest uppercase">

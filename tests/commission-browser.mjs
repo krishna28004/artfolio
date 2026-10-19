@@ -41,13 +41,6 @@ async function evaluate(expression) {
   if (response.exceptionDetails) throw new Error(response.exceptionDetails.text);
   return response.result.value;
 }
-async function click(selector) {
-  await evaluate(`document.querySelector(${JSON.stringify(selector)})?.scrollIntoView({block:'center'})`);
-  const point = await evaluate(`(() => { const r = document.querySelector(${JSON.stringify(selector)})?.getBoundingClientRect(); return r && {x:r.x+r.width/2,y:r.y+r.height/2}; })()`);
-  assert.ok(point, `Missing ${selector}`);
-  await send("Input.dispatchMouseEvent", { type: "mousePressed", button: "left", clickCount: 1, ...point });
-  await send("Input.dispatchMouseEvent", { type: "mouseReleased", button: "left", clickCount: 1, ...point });
-}
 try {
   await until(async () => (await fetch(`http://127.0.0.1:${port}/json/version`)).ok, "browser endpoint");
   const target = await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: "PUT" })).json();
@@ -73,33 +66,28 @@ try {
     await send("Emulation.setDeviceMetricsOverride", {
       width: viewport.width, height: viewport.height, deviceScaleFactor: 1, mobile: viewport.mobile,
     });
-    await send("Page.navigate", { url: `${appUrl}/commission` });
-    await until(() => evaluate("!!document.querySelector('#patron-name, [role=status]')"), `${viewport.name} commission state`);
+    await send("Page.navigate", { url: `${appUrl}/commission?browser=${viewport.name}` });
+    await until(() => evaluate(`location.search.includes(${JSON.stringify(`browser=${viewport.name}`)}) && !!document.querySelector('#commission-auth-email, #patron-name')`), `${viewport.name} commission state`);
     const page = await evaluate(`({ heading:document.querySelector('h1')?.textContent,
       overflow:document.documentElement.scrollWidth > innerWidth + 2,
-      hasPrivacyNotice:document.body.innerText.includes('References are stored privately'),
-      hasSubmit:!!document.querySelector('button[type=submit]'),
-      paused:document.querySelector('[role=status]')?.textContent?.includes('Requests are paused') || false })`);
+      hasCodeRequest:document.body.textContent.includes('Send verification code'),
+      hasEmail:!!document.querySelector('#commission-auth-email'),
+      hasPassword:!!document.querySelector('#commission-auth-password'),
+      hasPatron:!!document.querySelector('#patron-name'),
+      hasSignup:document.body.textContent.includes('Create account') })`);
     assert.match(page.heading, /Commission a Piece/);
     assert.equal(page.overflow, false, `${viewport.name} horizontal overflow`);
-    if (page.paused) {
-      assert.equal(page.hasSubmit, false, `${viewport.name} paused intake has no submit control`);
-      assert.equal(await evaluate("!!document.querySelector('#patron-name')"), false);
-    } else {
-      assert.equal(page.hasPrivacyNotice, true);
-      assert.equal(page.hasSubmit, true);
-    }
-    if (viewport.name === "desktop" && !page.paused) {
-      await click("button[type=submit]");
-      await until(() => evaluate("document.body.innerText.includes('Name must be at least 2 characters')"), "inline validation");
-      assert.equal(await evaluate("!!document.querySelector('#patron-name')"), true);
-    }
+    assert.equal(page.hasEmail && page.hasCodeRequest, true, `${viewport.name} offers email code verification`);
+    assert.equal(page.hasPassword || page.hasSignup, false, `${viewport.name} does not require a password or account form`);
+    assert.equal(page.hasPatron, false, `${viewport.name} does not expose the request form to guests`);
+    assert.equal(await evaluate("document.querySelector('#commission-auth-email')?.required"), true);
+    await evaluate("window.scrollTo(0, 0)");
     const screenshot = await send("Page.captureScreenshot", { captureBeyondViewport: true });
     const output = path.join(profile, `commission-${viewport.name}.png`);
     writeFileSync(output, Buffer.from(screenshot.data, "base64"));
-    console.log(`${viewport.name}: ${page.paused ? 'paused intake' : 'form'} and responsive width passed; screenshot ${output}`);
+    console.log(`${viewport.name}: email-code entry and responsive width passed; screenshot ${output}`);
   }
-  if (await evaluate("document.querySelector('[role=status]')?.textContent?.includes('Requests are paused') || false")) {
+  if (await evaluate("document.body.innerText.includes('The studio has paused new requests')")) {
     const intake = await fetch(`${appUrl}/api/commission`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
     assert.equal(intake.status, 503, "paused intake is enforced server-side");
   }
